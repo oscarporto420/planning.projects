@@ -198,7 +198,7 @@ function bancoSalvar(k) {
   S._bkN[k] = parts.length;
 }
 function salvarBase(k) { if (/^(mao|vem|mat|ind|ser)_\d+$/.test(k)) return; if (/^(mao|vem|mat|ind|ser)$/.test(k) && S.base[k]) ordenaBanco(S.base[k].rows); if (k === 'cpuins') return cpuSalvarIns(); S.ctx = null; S.cache = {}; S.projetos.forEach(function (p) { p._ctx = null; }); if (BANCOS_P.indexOf(k) >= 0 && S.base[k]) return bancoSalvar(k); gravar('base/' + k, S.base[k]); }
-function limpaCache(pid) { delete S.cache[pid]; }
+function limpaCache(pid) { delete S.cache[pid]; if (S.revcD && S.revcD[pid]) S.revcD[pid].atual = null; }
 function moverProjeto(p, liberado) {
   var antigo = p._raiz;
   p.liberado = liberado; p._raiz = raiz(p);
@@ -700,6 +700,7 @@ function pagina() {
   if (a === 'SUP') f = shSup;
   if (a === 'USR') f = shUsr;
   if (a === 'MANUAL') f = shManual;
+  if (a === 'REVC') f = shRevc;
   if (!f && (/^R_/.test(a) || a === 'HISP')) f = shRelt;
   return f ? f(p) : '';
 }
@@ -4862,7 +4863,7 @@ function dlgExp(d) {
 }
 
 /* ================= início ================= */
-window.__custo = { S: S, render: render, salvarMeta: salvarMeta, GRUPOS_ABAS: GRUPOS_ABAS, NOMES: NOMES, nivelAba: nivelAba, nivelProj: nivelProj, podeEditar: podeEditar, podeGravar: podeGravar, proj: proj, zipUm: zipUm, croXml: croXml, relRecursos: relRecursos, idrEfetivo: idrEfetivo, cpuDados: cpuDados, cpuCalc: cpuCalc, croRecriarCpus: croRecriarCpus, croCarregar: croCarregar, croGerarFin: croGerarFin, croDeFin: croDeFin, croCompletarLb: croCompletarLb, croDistribuir: croDistribuir, croRemoverChaves: croRemoverChaves, croRecriarCpus2: null, salvarBase: salvarBase, salvarMeta: salvarMeta, apagarAtiv: apagarAtiv, cpuChaves: cpuChaves, croCalc: croCalc, croResultado: croResultado, calc: calc, novoProjeto: novoProjeto, proj: proj, cfgFalta: cfgFalta, croGerarPadrao: croGerarPadrao, croLerXml: croLerXml, croGravarTudo: croGravarTudo, croParam: croParam, supCalc: supCalc };
+window.__custo = { S: S, render: render, calc: calc, croCalc: croCalc, croCarregar: croCarregar, custoResumo: custoResumo, salvarMeta: salvarMeta, GRUPOS_ABAS: GRUPOS_ABAS, NOMES: NOMES, nivelAba: nivelAba, nivelProj: nivelProj, podeEditar: podeEditar, podeGravar: podeGravar, proj: proj, zipUm: zipUm, croXml: croXml, relRecursos: relRecursos, idrEfetivo: idrEfetivo, cpuDados: cpuDados, cpuCalc: cpuCalc, croRecriarCpus: croRecriarCpus, croCarregar: croCarregar, croGerarFin: croGerarFin, croDeFin: croDeFin, croCompletarLb: croCompletarLb, croDistribuir: croDistribuir, croRemoverChaves: croRemoverChaves, croRecriarCpus2: null, salvarBase: salvarBase, salvarMeta: salvarMeta, apagarAtiv: apagarAtiv, cpuChaves: cpuChaves, croCalc: croCalc, croResultado: croResultado, calc: calc, novoProjeto: novoProjeto, proj: proj, cfgFalta: cfgFalta, croGerarPadrao: croGerarPadrao, croLerXml: croLerXml, croGravarTudo: croGravarTudo, croParam: croParam, supCalc: supCalc };
 temaAplica(); render();
 carregar().then(function () {
   /* projetos antigos: passam a ter a própria lista de grupos de atividade */
@@ -6716,9 +6717,12 @@ function revProc(prom, fim) {
 }
 function revCriar(p, obs) {
   var n = revAtual(p), dst = dirP(p) + '/revs/' + n, item = { n: n, criada: new Date().toISOString(), por: S.papel.nome || S.papel.email || '', obs: obs || '' };
-  return revEsperaFila().then(function () { return revCopiar(dirP(p), dst); }).then(function () {
+  var ind = null;
+  return revInd(p).then(function (o) { ind = o; }, function (e) { console.error('indicadores da revisão', e); }).then(revEsperaFila).then(function () { return revCopiar(dirP(p), dst); }).then(function () {
     var m = metaDe(p); m.rev = { atual: n, lista: revLista(p).concat([item]) };
-    return db.doc(dst).set({ n: n, criada: item.criada, por: item.por, obs: item.obs, meta: m });
+    var doc = { n: n, criada: item.criada, por: item.por, obs: item.obs, meta: m }; if (ind) doc.ind = ind;
+    if (S.revcD && S.revcD[p.id]) S.revcD[p.id].docs[n] = doc;
+    return db.doc(dst).set(doc);
   }).then(function () {
     p.rev = { atual: revNum(+n + 1), lista: revLista(p).concat([item]) }; salvarMeta(p);
     return item;
@@ -6816,8 +6820,9 @@ var MANUAL_REV = {
     'Abrir uma revisão fixa mostra o projeto exatamente como estava, em modo leitura, com uma faixa amarela no topo. "Voltar para a revisão em edição" retorna ao trabalho.',
     'Duplicar cria um projeto de teste em rascunho (nome com "TESTE Rev. NN") para simulações e validações, sem mexer na numeração do projeto original.',
     'Restaurar congela a revisão em edição e traz o conteúdo da revisão escolhida como próxima revisão. Nada é apagado: a revisão que estava em edição também fica guardada.',
-    'O RDO é registro diário da obra e é o mesmo em todas as revisões.'],
-  fluxo: ['Projeto criado: Rev. 00 em edição', 'Cadastro e planejamento completos', 'Nova revisão: Rev. 00 fica fixa', 'Trabalho segue na Rev. 01', 'Replanejamento aprovado: Nova revisão', 'Rev. 01 fixa, trabalho na Rev. 02']
+    'O RDO é registro diário da obra e é o mesmo em todas as revisões.',
+    'Rotina mensal: atualize o avanço e a data de status, crie a nova revisão e analise o Comparativo de revisões (Custos), que compara cada revisão com a Rev. 00 e com a anterior.'],
+  fluxo: ['Projeto criado: Rev. 00 em edição', 'Cadastro e planejamento completos', 'Nova revisão: Rev. 00 fica fixa (linha de base)', 'Fechamento do mês: avanço e data de status', 'Nova revisão: mês congelado', 'Comparativo × Rev. 00 e × anterior']
 };
 var MANUAL = {
   PROJETOS: { r: 'Carteira de projetos: lista todos os projetos com tipo, fase, prazo, custo e venda, e é o ponto de partida para abrir, criar, liberar, exportar e importar projetos.',
@@ -6853,6 +6858,9 @@ var MANUAL = {
   RSK: { r: 'Gestão de riscos: registro de riscos com probabilidade × impacto, resposta, responsável e reserva de contingência.',
     d: ['Cada risco tem probabilidade, impacto, valor, resposta, responsável e situação (aberto, encerrado, ocorreu).', 'A matriz mostra os riscos em aberto; a reserva de contingência é a soma de probabilidade × impacto e entra no preço total do Indireto.', 'Riscos encerrados liberam reserva; riscos ocorridos viram custo.'],
     f: ['Identificar o risco', 'Avaliar probabilidade e impacto', 'Definir resposta e responsável', 'Acompanhar', 'Encerrar ou registrar ocorrência'] },
+  REVC: { r: 'Comparativo de revisões: acompanhamento mensal do projeto, comparando a revisão analisada com a Rev. 00 (linha de base) e com a revisão anterior.',
+    d: ['Cada revisão guarda seus indicadores no momento em que é congelada: preço total, custo direto, indireto, riscos, venda, resultado, margem, avanço previsto e real, data de status e término previsto, custo mês a mês e custo por item da EAP.', 'Escolha a revisão analisada; os cartões mostram o valor e a variação contra a Rev. 00 e contra a anterior (vermelho = piora, verde = melhora).', 'Gráficos: evolução cenário a cenário, avanço físico em cada revisão, custo acumulado mês a mês (Rev. 00 × anterior × analisada) e variação do custo direto por grupo da EAP.', 'Tabelas de indicadores, custo por mês e itens da EAP, com exportação para Excel.'],
+    f: ['Atualizar avanço e data de status do mês', 'Nova revisão (congela o mês)', 'Abrir o Comparativo de revisões', 'Ler variações × Rev. 00 e × anterior', 'Registrar ações e replanejar'] },
   RELA: { r: 'Relacionamento: liga as composições (CPU) às atividades da EAP, com quantidades, formando o custo direto do projeto.',
     d: ['À esquerda, os itens da EAP; ao lado, as composições relacionadas à atividade selecionada (quantidade editável).', 'A biblioteca permite buscar e relacionar composições. Composições da biblioteca não são editadas aqui; use "Criar cópia especial para este projeto" para ajustar.', 'Cada mudança recalcula o custo direto no Cronograma financeiro.'],
     f: ['Selecionar atividade da EAP', 'Buscar composição na biblioteca', 'Relacionar e informar quantidade', 'Custo direto recalcula'] },
@@ -6922,6 +6930,185 @@ function shManual() {
     s += '<section class="man-g"><h3>' + esc(g[0] || 'Início') + '</h3>' + ks.map(function (k) { var m = MANUAL[k]; return item(k, NOMES[k] || k, m.r, m.d, m.f); }).join('') + '</section>';
   });
   return s;
+}
+
+
+/* ================= COMPARATIVO DE REVISÕES (acompanhamento mensal) =================
+   Cada revisão guarda, ao ser congelada, os indicadores do projeto (revs/<NN>.ind). A revisão analisada é sempre
+   comparada com a Rev. 00 (linha de base) e com a revisão imediatamente anterior. */
+NOMES.REVC = 'Comparativo de revisões'; PRECISA_PROJ.REVC = 1; ABAS.push(['REVC', '#5a4475']);
+ICA.REVC = '<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/><path d="M4 9l6-4 6 7 5-5" stroke-dasharray="2 2"/>';
+(function () { GRUPOS_ABAS.forEach(function (g) { if (g[0] === 'Custos' && g[1].indexOf('REVC') < 0) g[1].unshift('REVC'); }); })();
+/* indicadores de uma revisão (a revisão em edição é calculada na hora) */
+function revInd(p) {
+  var pr = p.crono && !p._cro ? croCarregar(p) : Promise.resolve();
+  return pr.then(function () {
+    var X = custoResumo(p), c = X.c, o = { em: new Date().toISOString(), dir: X.dir, ind: X.ind, risco: X.risco, bdi: X.bdi, preco: X.venda, custo: X.dir + X.ind + X.risco, mes: { custo: {} }, eap: [] };
+    (c.res.months || []).forEach(function (mi, i) { var v = num(c.fin.total.mes[i]); if (v) o.mes.custo[mi] = v; });
+    if (p.crono && p._cro) {
+      var R = croCalc(p), D = croResultado(p, R), lbF = null, atF = null, lbI = null, atI = null;
+      R.leaves.forEach(function (t) { var a = dn(t.bi || t.i), b = dn(t.bf || t.f), x = dn(t.i), y = dn(t.f); if (a != null && (lbI == null || a < lbI)) lbI = a; if (b != null && (lbF == null || b > lbF)) lbF = b; if (x != null && (atI == null || x < atI)) atI = x; if (y != null && (atF == null || y > atF)) atF = y; });
+      o.cro = { st: Math.floor(R.st), V: R.tot.v, pv: croPct(R.tot, 'pv'), ev: croPct(R.tot, 'ev'), cd: R.cdTot, ci: R.ciTot, imp: D.imp, tac: D.tac, antes: D.antes, csll: D.csll, ir: D.ir, liq: D.liq, lbI: lbI, lbF: lbF, atI: atI, atF: atF, n: R.leaves.length };
+      var cp = function (m) { var r = {}; Object.keys(m || {}).forEach(function (k) { if (m[k]) r[k] = m[k]; }); return r; };
+      o.mes.vLB = cp(R.mP); o.mes.vAt = cp(R.mT); o.mes.vR = cp(R.mR); o.mes.cd = cp(R.mCD); o.mes.ci = cp(R.mCI);
+      p._cro.tasks.forEach(function (t) { if (t.l >= 1 && t.l <= 2 && R.N[t.u]) { var n = R.N[t.u]; o.eap.push({ u: t.u, w: t.w, n: t.n, l: t.l, v: n.v, cd: n.cd, ev: n.ev, pv: n.pv }); } });
+    }
+    return o;
+  });
+}
+function revcDados(p) {
+  var K = S.revcD || (S.revcD = {}), D = K[p.id] || (K[p.id] = { docs: {}, carregando: false, atual: null });
+  var faltam = revLista(p).filter(function (r) { return !(r.n in D.docs); });
+  if (!D.carregando && faltam.length) {
+    D.carregando = true;
+    Promise.all(faltam.map(function (r) { return db.doc(dirP(p) + '/revs/' + r.n).get().then(function (d) { D.docs[r.n] = d ? d.data() : null; }, function () { D.docs[r.n] = null; }); }))
+      .then(function () { D.carregando = false; agendar(); });
+  }
+  if (!D.atual && !D.calc) { D.calc = true; revInd(p).then(function (o) { D.atual = o; D.calc = false; agendar(); }, function (e) { D.calc = false; D.erro = (e && e.message) || String(e); agendar(); }); }
+  return D;
+}
+function revcInvalidar(p) { if (S.revcD && S.revcD[p.id]) { S.revcD[p.id].atual = null; } }
+/* calcula e grava os indicadores das revisões fixas que ainda não têm (revisões criadas antes do comparativo) */
+function revcCalcularFaltantes(p) {
+  var D = revcDados(p), L = revLista(p).filter(function (r) { return !(D.docs[r.n] && D.docs[r.n].ind); }), ok = 0;
+  var um = function (i) {
+    if (i >= L.length) return Promise.resolve(ok);
+    var r = L[i], k = p.id + '@' + r.n, dir = dirP(p) + '/revs/' + r.n;
+    return revAbrir(p, r.n).then(function () { var v = S.revs[k]; S.v.revVer = null; return revInd(v); }).then(function (ind) {
+      var doc = Object.assign({}, D.docs[r.n] || {}, { ind: ind }); D.docs[r.n] = doc; ok++;
+      return db.doc(dir).set(doc);
+    }).then(function () { return um(i + 1); });
+  };
+  return um(0);
+}
+/* ---------- gráficos simples (SVG) ---------- */
+var REVC_COR = { base: '#8a94a6', ant: '#d08a00', at: '#1769e8', ok: '#1b7f4c', ru: '#c8322b' };
+function revcLinhas(series, rotX, opt) {
+  opt = opt || {}; var W = 900, H = 280, ml = 70, mr = 16, mt = 16, mb = 40, n = rotX.length;
+  if (!n) return '<div class="vazio">Sem dados.</div>';
+  var all = []; series.forEach(function (s) { s.v.forEach(function (v) { if (v != null) all.push(v); }); });
+  var mx = Math.max.apply(null, all.concat([0])), mn = Math.min.apply(null, all.concat([0])); if (mx === mn) mx = mn + 1;
+  var x = function (i) { return ml + (W - ml - mr) * (n > 1 ? i / (n - 1) : 0.5); }, y = function (v) { return mt + (H - mt - mb) * (1 - (v - mn) / (mx - mn)); };
+  var g = '';
+  for (var k = 0; k <= 4; k++) { var vv = mn + (mx - mn) * k / 4, yy = y(vv); g += '<line x1="' + ml + '" x2="' + (W - mr) + '" y1="' + yy + '" y2="' + yy + '" stroke="var(--borda)"/><text x="' + (ml - 6) + '" y="' + (yy + 4) + '" text-anchor="end">' + (opt.fmt ? opt.fmt(vv) : compact(vv)) + '</text>'; }
+  var passo = Math.max(1, Math.ceil(n / 12));
+  rotX.forEach(function (r, i) { if (i % passo === 0 || i === n - 1) g += '<text x="' + x(i) + '" y="' + (H - 14) + '" text-anchor="' + (n > 1 && i === 0 ? 'start' : n > 1 && i === n - 1 ? 'end' : 'middle') + '">' + esc(r) + '</text>'; });
+  series.forEach(function (s) {
+    var pts = []; s.v.forEach(function (v, i) { if (v != null) pts.push(x(i).toFixed(1) + ',' + y(v).toFixed(1)); });
+    g += '<polyline fill="none" stroke="' + s.cor + '" stroke-width="' + (s.w || 2.2) + '"' + (s.dash ? ' stroke-dasharray="6 4"' : '') + ' points="' + pts.join(' ') + '"/>';
+    if (opt.pontos) s.v.forEach(function (v, i) { if (v != null) g += '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(v).toFixed(1) + '" r="3.5" fill="' + s.cor + '"><title>' + esc(s.nome + ' · ' + rotX[i] + ': ' + (opt.fmt ? opt.fmt(v) : money(v))) + '</title></circle>'; });
+  });
+  return '<div class="gleg">' + series.map(function (s) { return '<span><i style="background:' + s.cor + '"></i>' + esc(s.nome) + '</span>'; }).join('') + '</div><svg class="revc-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(opt.titulo || 'gráfico') + '">' + g + '</svg>';
+}
+function revcBarras(itens) {
+  /* itens: [{rot, a, b}] — a = variação contra a Rev. 00, b = contra a anterior */
+  if (!itens.length) return '<div class="vazio">Sem itens da EAP para comparar.</div>';
+  var mx = Math.max.apply(null, itens.map(function (i) { return Math.max(Math.abs(i.a), Math.abs(i.b)); }).concat([1]));
+  var bar = function (v, cor) { var w = Math.abs(v) / mx * 50; return '<span class="revc-b" style="' + (v < 0 ? 'right:50%' : 'left:50%') + ';width:' + w.toFixed(2) + '%;background:' + cor + '"></span>'; };
+  return '<div class="revc-bars">' + itens.map(function (i) {
+    return '<div class="revc-br"><div class="revc-bl">' + esc(i.rot) + '</div><div class="revc-bt"><div class="revc-bz">' + bar(i.a, REVC_COR.base) + '</div><div class="revc-bz">' + bar(i.b, REVC_COR.at) + '</div></div>' +
+      '<div class="revc-bv"><span class="' + (i.a > 0 ? 'ru' : i.a < 0 ? 'ok' : '') + '">' + revcSinal(i.a) + '</span><span class="' + (i.b > 0 ? 'ru' : i.b < 0 ? 'ok' : '') + '">' + revcSinal(i.b) + '</span></div></div>';
+  }).join('') + '</div>';
+}
+function revcSinal(v, f) { if (v == null || isNaN(v)) return '–'; return (v > 0 ? '+' : v < 0 ? '−' : '') + (f ? f(Math.abs(v)) : money(Math.abs(v))); }
+function revcDia(d) { return d == null ? '–' : fdate(d); }
+/* ---------- tela ---------- */
+function shRevc(p) {
+  if (p._rev) return titulo('COMPARATIVO DE REVISÕES') + '<div class="vazio">Volte para a revisão em edição para ver o comparativo.</div>';
+  var D = revcDados(p), V = S.v.revc || (S.v.revc = {}), L = revLista(p), at = revAtual(p), adm = ehAdmin() && !!db;
+  /* colunas: fixas + em edição */
+  var cols = L.map(function (r) { var d = D.docs[r.n]; return { n: r.n, rot: 'Rev. ' + r.n, data: r.criada, obs: r.obs, ind: d && d.ind, fixa: true }; });
+  cols.push({ n: at, rot: 'Rev. ' + at, data: null, obs: 'em edição', ind: D.atual, fixa: false });
+  var semInd = cols.filter(function (c) { return c.fixa && !c.ind && (c.n in D.docs); });
+  var sel = V[p.id] != null && cols.some(function (c) { return c.n === V[p.id]; }) ? V[p.id] : at;
+  var iA = cols.map(function (c) { return c.n; }).indexOf(sel), A = cols[iA], B = iA > 0 ? cols[iA - 1] : null, Z = cols[0];
+  var s = titulo('COMPARATIVO DE REVISÕES', '<label class="revc-sel">Revisão analisada <select aria-label="Revisão analisada" ' + h(function (el) { V[p.id] = el.value; agendar(); }) + '>' +
+    cols.slice().reverse().map(function (c) { return '<option value="' + c.n + '"' + (c.n === sel ? ' selected' : '') + '>' + c.rot + (c.fixa ? ' · ' + fdh(c.data).slice(0, 10) : ' · em edição') + '</option>'; }).join('') + '</select></label>' +
+    '<button class="bxl" ' + h(function () { revcExcel(p, cols); }) + '>' + XL_IC + 'Exportar Excel</button>');
+  if (!L.length) s += '<div class="nota">Este projeto ainda está na Rev. 00. Ao criar a primeira revisão (botão “Nova revisão” no topo), a Rev. 00 fica fixa como linha de base e os comparativos aparecem aqui. Crie uma revisão por mês para o acompanhamento mensal.</div>';
+  if (D.carregando || !D.atual) return s + '<div class="vazio">' + (D.erro ? 'Não foi possível calcular: ' + esc(D.erro) : 'Calculando os indicadores das revisões…') + '</div>';
+  if (semInd.length) s += '<div class="nota">' + semInd.map(function (c) { return c.rot; }).join(', ') + (semInd.length > 1 ? ' foram criadas' : ' foi criada') + ' antes do comparativo e ainda não ' + (semInd.length > 1 ? 'têm' : 'tem') + ' indicadores. ' +
+    (adm ? bt('Calcular agora', function () { revProc(revcCalcularFaltantes(p), function (n) { aviso(n + ' revisão(ões) calculada(s).'); }); }, 'lk') : 'Peça a um administrador para calcular.') + '</div>';
+  var a = A.ind || {}, b = (B && B.ind) || null, z = Z.ind || null, ac = a.cro || {}, bc = b && b.cro || {}, zc = z && z.cro || {};
+  var temCro = !!a.cro;
+  var dlt = function (va, vb) { return vb == null || va == null ? null : va - vb; };
+  var margem = function (o) { return o && o.cro && o.cro.V ? o.cro.liq / o.cro.V : null; };
+  var prazo = function (o) { return o && o.cro && o.cro.atF != null && o.cro.lbI != null ? o.cro.atF - o.cro.lbI : null; };
+  /* cartões */
+  var card = function (rot, va, vz, vb, fmt, menorMelhor, hero, fmtD) {
+    var d0 = dlt(va, vz), d1 = dlt(va, vb), cl = function (d) { return d == null || !d ? '' : (menorMelhor ? d > 0 : d < 0) ? 'ru' : 'ok'; }; fmtD = fmtD || fmt;
+    return '<div class="kt' + (hero ? ' hero' : '') + '"><span>' + rot + '</span><b>' + (va == null ? '–' : fmt(va)) + '</b><i class="revc-d"><em class="' + cl(d0) + '">vs Rev. ' + Z.n + ': ' + revcSinal(d0, fmtD) + '</em>' +
+      (B ? '<em class="' + cl(d1) + '">vs Rev. ' + B.n + ': ' + revcSinal(d1, fmtD) + '</em>' : '') + '</i></div>';
+  };
+  var fm = function (v) { return 'R$ ' + compact(v); }, fp = function (v) { return nf2.format(v * 100) + '%'; }, fpp = function (v) { return nf2.format(v * 100) + ' p.p.'; }, fd = function (v) { return int(v) + ' d'; };
+  s += '<div class="revc-cab"><b>' + esc(A.rot) + '</b> ' + (A.fixa ? '· congelada em ' + fdh(A.data) : '· em edição') + (A.obs && A.fixa ? ' · ' + esc(A.obs) : '') + '<span>comparada com a <b>Rev. ' + Z.n + '</b> (linha de base)' + (B ? ' e com a <b>' + esc(B.rot) + '</b> (anterior)' : '') + '</span></div>';
+  s += '<div class="gk revc-k">' + card('Preço total do projeto', a.preco, z && z.preco, b && b.preco, fm, false, true) + card('Custo total (direto + indireto + riscos)', a.custo, z && z.custo, b && b.custo, fm, true) +
+    (temCro ? card('Resultado líquido', ac.liq, zc.liq, bc.liq, fm, false) + card('Margem líquida', margem(a), margem(z), margem(b), fp, false, false, fpp) +
+      card('Avanço real', ac.ev, zc.ev, bc.ev, fp, false, false, fpp) + card('Término previsto', ac.atF, zc.atF, bc.atF, fdate, true, false, function (v) { return int(v) + ' d'; }) : card('Custo direto', a.dir, z && z.dir, b && b.dir, fm, true) + card('Custo indireto', a.ind, z && z.ind, b && b.ind, fm, true)) + '</div>';
+  /* tabela de indicadores por revisão */
+  var linhas = [['Preço total (R$)', function (o) { return o.preco; }, 'm'], ['Custo direto (R$)', function (o) { return o.dir; }, 'm'], ['Custo indireto (R$)', function (o) { return o.ind; }, 'm'], ['Reserva de riscos (R$)', function (o) { return o.risco; }, 'm'], ['Custo total (R$)', function (o) { return o.custo; }, 'm'], ['BDI', function (o) { return o.bdi; }, 'p']];
+  if (temCro) linhas = linhas.concat([['Venda – linha de base do cronograma (R$)', function (o) { return o.cro && o.cro.V; }, 'm'], ['Custo direto – CPU (R$)', function (o) { return o.cro && o.cro.cd; }, 'm'], ['Custo indireto – permanência (R$)', function (o) { return o.cro && o.cro.ci; }, 'm'],
+    ['Resultado antes de CSLL e IR (R$)', function (o) { return o.cro && o.cro.antes; }, 'm'], ['Resultado líquido (R$)', function (o) { return o.cro && o.cro.liq; }, 'm'], ['Margem líquida', margem, 'p'],
+    ['Data de status', function (o) { return o.cro && o.cro.st; }, 'd'], ['Avanço previsto (LB)', function (o) { return o.cro && o.cro.pv; }, 'p'], ['Avanço real', function (o) { return o.cro && o.cro.ev; }, 'p'], ['SPI', function (o) { return o.cro && o.cro.pv ? o.cro.ev / o.cro.pv : null; }, 'n'],
+    ['Término pela linha de base', function (o) { return o.cro && o.cro.lbF; }, 'd'], ['Término previsto (atual)', function (o) { return o.cro && o.cro.atF; }, 'd'], ['Prazo total (dias corridos)', prazo, 'i']]);
+  var fv = function (v, t) { return v == null || isNaN(v) ? '–' : t === 'm' ? money(v) : t === 'p' ? pct(v) : t === 'd' ? fdate(v) : t === 'i' ? int(v) : nf2.format(v); };
+  var fdv = function (v, t) { return v == null || isNaN(v) ? '–' : t === 'm' ? revcSinal(v) : t === 'p' ? revcSinal(v, function (x) { return nf2.format(x * 100) + ' p.p.'; }) : t === 'd' || t === 'i' ? revcSinal(v, function (x) { return int(x) + ' d'; }) : revcSinal(v, function (x) { return nf2.format(x); }); };
+  s += '<div class="gc"><h3>Indicadores por revisão</h3><div class="tw revc-tw"><table class="g revc-t"><thead><tr><th class="l">INDICADOR</th>' + cols.map(function (c) { return '<th class="' + (c.n === A.n ? 'on' : '') + '">' + c.rot + '<small>' + (c.fixa ? fdh(c.data).slice(0, 10) : 'em edição') + '</small></th>'; }).join('') + '<th class="dv">Δ ' + esc(A.rot) + ' × Rev. ' + Z.n + '</th>' + (B ? '<th class="dv">Δ ' + esc(A.rot) + ' × ' + esc(B.rot) + '</th>' : '') + '</tr></thead><tbody>' +
+    linhas.map(function (l) { var va = A.ind ? l[1](A.ind) : null; return '<tr><td>' + l[0] + '</td>' + cols.map(function (c) { return '<td class="n' + (c.n === A.n ? ' on' : '') + '">' + (c.ind ? fv(l[1](c.ind), l[2]) : '–') + '</td>'; }).join('') +
+      '<td class="n dv">' + (z ? fdv(dlt(va, l[1](z)), l[2]) : '–') + '</td>' + (B ? '<td class="n dv">' + (b ? fdv(dlt(va, l[1](b)), l[2]) : '–') + '</td>' : '') + '</tr>'; }).join('') + '</tbody></table></div></div>';
+  /* evolução por revisão */
+  var comInd = cols.filter(function (c) { return c.ind; });
+  if (comInd.length > 1) {
+    var ser = [{ nome: 'Preço total', cor: REVC_COR.at, v: comInd.map(function (c) { return c.ind.preco; }) }, { nome: 'Custo total', cor: REVC_COR.ru, v: comInd.map(function (c) { return c.ind.custo; }) }];
+    if (temCro) ser.push({ nome: 'Resultado líquido', cor: REVC_COR.ok, v: comInd.map(function (c) { return c.ind.cro ? c.ind.cro.liq : null; }) });
+    s += '<div class="gc"><h3>Evolução cenário a cenário</h3>' + revcLinhas(ser, comInd.map(function (c) { return c.rot; }), { pontos: true, titulo: 'Evolução por revisão', fmt: function (v) { return compact(v); } }) + '</div>';
+    if (temCro) s += '<div class="gc"><h3>Avanço físico em cada revisão</h3>' + revcLinhas([{ nome: 'Previsto (LB)', cor: REVC_COR.base, dash: true, v: comInd.map(function (c) { return c.ind.cro ? c.ind.cro.pv : null; }) }, { nome: 'Real', cor: REVC_COR.at, v: comInd.map(function (c) { return c.ind.cro ? c.ind.cro.ev : null; }) }], comInd.map(function (c) { return c.rot + (c.ind.cro ? ' (' + fdate(c.ind.cro.st).slice(0, 5) + ')' : ''); }), { pontos: true, fmt: function (v) { return nf2.format(v * 100) + '%'; }, titulo: 'Avanço físico' }) + '</div>';
+  }
+  /* custo acumulado mês a mês: Rev. 00 × anterior × analisada */
+  var trio = [{ c: Z, nome: 'Rev. ' + Z.n + ' (linha de base)', cor: REVC_COR.base, dash: true }]; if (B && B !== Z) trio.push({ c: B, nome: B.rot + ' (anterior)', cor: REVC_COR.ant }); if (A !== Z) trio.push({ c: A, nome: A.rot + ' (analisada)', cor: REVC_COR.at, w: 3 });
+  var meses = {}; trio.forEach(function (t) { if (t.c.ind) Object.keys(t.c.ind.mes.custo || {}).forEach(function (k) { meses[k] = 1; }); });
+  var ks = Object.keys(meses).map(Number).sort(function (x, y) { return x - y; });
+  if (ks.length) {
+    var acum = function (m) { var x = 0; return ks.map(function (k) { x += num((m || {})[k]); return x; }); };
+    s += '<div class="gc"><h3>Custo acumulado mês a mês</h3>' + revcLinhas(trio.filter(function (t) { return t.c.ind; }).map(function (t) { return { nome: t.nome, cor: t.cor, dash: t.dash, w: t.w, v: acum(t.c.ind.mes.custo) }; }), ks.map(mmaa), { titulo: 'Custo acumulado' }) + '</div>';
+    s += '<div class="gc"><h3>Custo por mês</h3><div class="tw revc-tw"><table class="g revc-t"><thead><tr><th class="l">MÊS</th>' + trio.map(function (t) { return '<th>' + esc(t.nome) + '</th>'; }).join('') + '<th class="dv">Δ × Rev. ' + Z.n + '</th>' + (B ? '<th class="dv">Δ × ' + esc(B.rot) + '</th>' : '') + '</tr></thead><tbody>' +
+      ks.map(function (k) { var va = A.ind ? num(A.ind.mes.custo[k]) : 0; return '<tr><td class="c">' + mmaa(k) + '</td>' + trio.map(function (t) { return '<td class="n">' + (t.c.ind ? money(num(t.c.ind.mes.custo[k])) : '–') + '</td>'; }).join('') + '<td class="n dv">' + (z ? revcSinal(va - num(z.mes.custo[k])) : '–') + '</td>' + (B ? '<td class="n dv">' + (b ? revcSinal(va - num(b.mes.custo[k])) : '–') + '</td>' : '') + '</tr>'; }).join('') + '</tbody></table></div></div>';
+  }
+  /* variação por grupo da EAP */
+  if (temCro) {
+    var mapa = function (o) { var m = {}; ((o && o.eap) || []).forEach(function (e) { m[e.w] = e; }); return m; }, mA = mapa(a), mZ = mapa(z), mB = mapa(b);
+    var grupos = (a.eap || []).filter(function (e) { return e.l === 1; });
+    s += '<div class="gc"><h3>Variação do custo direto por grupo da EAP</h3><div class="gleg"><span><i style="background:' + REVC_COR.base + '"></i>' + esc(A.rot) + ' × Rev. ' + Z.n + '</span>' + (B ? '<span><i style="background:' + REVC_COR.at + '"></i>' + esc(A.rot) + ' × ' + esc(B.rot) + '</span>' : '') + '<span>vermelho = aumento de custo · verde = redução</span></div>' +
+      revcBarras(grupos.map(function (e) { return { rot: e.w + ' ' + e.n, a: e.cd - num((mZ[e.w] || {}).cd), b: B ? e.cd - num((mB[e.w] || {}).cd) : 0 }; })) + '</div>';
+    var it = (a.eap || []);
+    s += '<div class="gc"><h3>Itens da EAP: venda, custo direto e avanço</h3><div class="tw revc-tw" style="max-height:520px"><table class="g revc-t"><thead><tr><th class="l">EAP</th><th>VENDA LB (R$)</th><th>CUSTO DIRETO Rev. ' + Z.n + '</th>' + (B ? '<th>CUSTO DIRETO ' + esc(B.rot) + '</th>' : '') + '<th class="on">CUSTO DIRETO ' + esc(A.rot) + '</th><th class="dv">Δ × Rev. ' + Z.n + '</th>' + (B ? '<th class="dv">Δ × ' + esc(B.rot) + '</th>' : '') + '<th>AVANÇO REAL</th></tr></thead><tbody>' +
+      it.map(function (e) { var ez = mZ[e.w], eb = mB[e.w]; return '<tr class="' + (e.l === 1 ? 'co' : '') + '"><td' + (e.l === 2 ? ' style="padding-left:22px"' : '') + '>' + esc(e.w + ' ' + e.n) + '</td><td class="n">' + money(e.v) + '</td><td class="n">' + (ez ? money(ez.cd) : '–') + '</td>' + (B ? '<td class="n">' + (eb ? money(eb.cd) : '–') + '</td>' : '') + '<td class="n on">' + money(e.cd) + '</td><td class="n dv">' + (ez ? revcSinal(e.cd - ez.cd) : 'novo') + '</td>' + (B ? '<td class="n dv">' + (eb ? revcSinal(e.cd - eb.cd) : 'novo') + '</td>' : '') + '<td class="n">' + (e.v ? pct(e.ev / e.v) : '–') + '</td></tr>'; }).join('') + '</tbody></table></div></div>';
+  }
+  return s + '<div class="nota">Os indicadores de cada revisão são guardados no momento em que ela é congelada. A revisão em edição é calculada na hora. Crie uma revisão por mês, depois de atualizar a data de status e o avanço, para formar o histórico mensal.</div>';
+}
+function revcExcel(p, cols) {
+  carregaXlsx().then(function (X) { revcExcelX(p, cols, X); });
+}
+function revcExcelX(p, cols, X) {
+  var wb = X.utils.book_new(), rot = cols.map(function (c) { return c.rot; });
+  var lin = [['Preço total', 'preco'], ['Custo direto', 'dir'], ['Custo indireto', 'ind'], ['Reserva de riscos', 'risco'], ['Custo total', 'custo'], ['BDI', 'bdi']];
+  var cro = [['Venda LB', 'V'], ['Custo direto CPU', 'cd'], ['Custo indireto permanência', 'ci'], ['Resultado antes CSLL/IR', 'antes'], ['Resultado líquido', 'liq'], ['Avanço previsto', 'pv'], ['Avanço real', 'ev']];
+  var aoa = [['Indicador'].concat(rot)];
+  lin.forEach(function (l) { aoa.push([l[0]].concat(cols.map(function (c) { return c.ind ? c.ind[l[1]] : null; }))); });
+  cro.forEach(function (l) { aoa.push([l[0]].concat(cols.map(function (c) { return c.ind && c.ind.cro ? c.ind.cro[l[1]] : null; }))); });
+  aoa.push(['Data de status'].concat(cols.map(function (c) { return c.ind && c.ind.cro ? fdate(c.ind.cro.st) : null; })));
+  aoa.push(['Término previsto'].concat(cols.map(function (c) { return c.ind && c.ind.cro ? fdate(c.ind.cro.atF) : null; })));
+  X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(aoa), 'Indicadores');
+  var ms = {}; cols.forEach(function (c) { if (c.ind) Object.keys(c.ind.mes.custo || {}).forEach(function (k) { ms[k] = 1; }); });
+  var ks = Object.keys(ms).map(Number).sort(function (x, y) { return x - y; }), m2 = [['Mês'].concat(rot)];
+  ks.forEach(function (k) { m2.push([mmaa(k)].concat(cols.map(function (c) { return c.ind ? num(c.ind.mes.custo[k]) : null; }))); });
+  X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(m2), 'Custo mensal');
+  var e = [['EAP', 'Item'].concat(rot)], ws = {}, ordem = [];
+  cols.forEach(function (c, i) { ((c.ind && c.ind.eap) || []).forEach(function (x) { if (!ws[x.w]) { ws[x.w] = { n: x.n, v: [] }; ordem.push(x.w); } ws[x.w].v[i] = x.cd; }); });
+  ordem.forEach(function (w) { e.push([w, ws[w].n].concat(cols.map(function (c, i) { return ws[w].v[i] == null ? null : ws[w].v[i]; }))); });
+  X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(e), 'Custo direto por EAP');
+  var out = X.write(wb, { bookType: 'xlsx', type: 'array' });
+  baixar('Comparativo-revisoes-' + semAcento(p.nome || 'projeto').replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '') + '.xlsx', out);
 }
 
 })();
