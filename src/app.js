@@ -64,7 +64,7 @@ var db = null, usr = null, dl = null;
 /* ganchos usados pela versão independente (Supabase); na página do Claude ficam nulos */
 var telaExtra = null, rotuloPapel = null;
 var podeEditar = function () {
-  if (!db) return false; if (ehAdmin()) return true;
+  if (!db) return false; var pr0 = proj(); if (pr0 && pr0._rev) return false; if (ehAdmin()) return true;
   var a = S.v.aba; if (a === 'PROJETOS' || USR_ADMIN_ABAS.indexOf(a) >= 0) return false;
   if (a === 'CONFIG' && ['proj', 'cal', 'clima', 'reaj'].indexOf(S.v.cfg || 'proj') < 0) return false;
   return nivelAba(a) === 'E' && nivelProj(proj()) === 'E';
@@ -73,18 +73,18 @@ var podeEditar = function () {
 var USR_ADMIN_ABAS = ['SIS', 'DADOS', 'CLI', 'USR'], USR_BANCO_ABAS = ['CPU', 'MAO', 'VEM', 'MAT', 'IND', 'SER', 'EPI', 'PCMSO', 'GHE', 'SESMT'];
 function ehAdmin() { return !!(S.papel && (S.papel.dono || S.papel.admin)); }
 function nivelAba(a) {
-  if (ehAdmin()) return 'E'; if (USR_ADMIN_ABAS.indexOf(a) >= 0) return '';
+  if (ehAdmin()) return 'E'; if (a === 'MANUAL') return 'V'; if (USR_ADMIN_ABAS.indexOf(a) >= 0) return '';
   var P = S.perm; if (!P) return 'V';
   var v = P.secoes && P.secoes[a] != null ? P.secoes[a] : P.secPadrao == null ? 'V' : P.secPadrao;
   if (v === 'E' && USR_BANCO_ABAS.indexOf(a) >= 0) v = 'V'; return v || '';
 }
 function nivelProj(p) {
   if (ehAdmin()) return 'E'; if (!p) return 'V';
-  var P = S.perm; if (!P) return 'V';
-  var v = P.projetos && P.projetos[p.id] != null ? P.projetos[p.id] : P.projPadrao == null ? '' : P.projPadrao; return v || '';
+  var P = S.perm; if (!P) return 'V'; var pid = p._orig || p.id;
+  var v = P.projetos && P.projetos[pid] != null ? P.projetos[pid] : P.projPadrao == null ? '' : P.projPadrao; return v || '';
 }
 function podeGravar(path) {
-  if (!db) return false; if (ehAdmin()) return true;
+  if (!db) return false; if (/\/revs\//.test(path)) return false; var pr0 = proj(); if (pr0 && pr0._rev) return false; if (ehAdmin()) return true;
   var m = /^projetos\/([^/]+)/.exec(path); if (!m) { if (!S._avisoAdm) { S._avisoAdm = 1; setTimeout(function () { aviso('Somente administradores alteram bancos de dados, composições e cadastros do sistema. A alteração não foi gravada.'); S._avisoAdm = 0; }, 50); } return false; }
   var p = S.projetos.filter(function (x) { return x.id === m[1]; })[0]; return !!p && nivelProj(p) === 'E' && podeEditar();
 }
@@ -164,13 +164,14 @@ function baseDe(p) {
   return b;
 }
 function ctxDe(p) { if (!temBaseP(p)) return ctx(); if (!p._ctx) p._ctx = E.prepare(baseDe(p)); return p._ctx; }
-function salvarBaseP(p) { limpaCache(p.id); p._ctx = null; BASE_P.forEach(function (k) { if (p._base && p._base[k]) gravar(p._raiz + '/' + p.id + '/base/' + k, p._base[k]); }); }
+function dirP(p) { return p._dir || (p._raiz + '/' + p.id); }
+function salvarBaseP(p) { limpaCache(p.id); p._ctx = null; BASE_P.forEach(function (k) { if (p._base && p._base[k]) gravar(dirP(p) + '/base/' + k, p._base[k]); }); }
 function apagarBaseP(p, raizP) { BASE_P.forEach(function (k) { gravar((raizP || p._raiz) + '/' + p.id + '/base/' + k, null); }); }
 function ativDoc(a) { var m = {}; Object.keys(a).forEach(function (k) { if (k !== 'id') m[k] = a[k]; }); return m; }
 function gruposDe(p) { return p && p.grupos && p.grupos.length ? p.grupos : S.base.tabelas.atividades; }
-function salvarMeta(p) { limpaCache(p.id); gravar(p._raiz + '/' + p.id, metaDe(p)); }
-function salvarAtiv(p, a) { limpaCache(p.id); gravar(p._raiz + '/' + p.id + '/ativ/' + a.id, ativDoc(a)); }
-function apagarAtiv(p, a) { limpaCache(p.id); gravar(p._raiz + '/' + p.id + '/ativ/' + a.id, null); }
+function salvarMeta(p) { limpaCache(p.id); gravar(dirP(p), metaDe(p)); }
+function salvarAtiv(p, a) { limpaCache(p.id); gravar(dirP(p) + '/ativ/' + a.id, ativDoc(a)); }
+function apagarAtiv(p, a) { limpaCache(p.id); gravar(dirP(p) + '/ativ/' + a.id, null); }
 /* bancos de dados sempre em ordem alfabética (descrição); linhas sem descrição ficam no fim */
 var ordAlfa = (function () { var co = typeof Intl !== 'undefined' ? new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true }) : null; return function (a, b) { a = String(a || '').trim(); b = String(b || '').trim(); if (!a !== !b) return a ? -1 : 1; return co ? co.compare(a, b) : (a < b ? -1 : a > b ? 1 : 0); }; })();
 function ordenaBanco(rows) { if (rows && rows.length > 1) rows.sort(function (x, y) { return ordAlfa(x.d, y.d); }); return rows; }
@@ -205,13 +206,13 @@ function moverProjeto(p, liberado) {
   gravar(p._raiz + '/' + p.id, metaDe(p));
   p.atividades.forEach(function (a) { gravar(p._raiz + '/' + p.id + '/ativ/' + a.id, ativDoc(a)); gravar(antigo + '/' + p.id + '/ativ/' + a.id, null); });
   if (temBaseP(p)) { salvarBaseP(p); apagarBaseP(p, antigo); }
-  croMover(p, antigo); mapaMover(p, antigo);
+  croMover(p, antigo); mapaMover(p, antigo); revMover(p, antigo);
   gravar(antigo + '/' + p.id, null);
 }
 function excluirProjeto(p) {
   p.atividades.forEach(function (a) { gravar(p._raiz + '/' + p.id + '/ativ/' + a.id, null); });
   if (temBaseP(p)) apagarBaseP(p);
-  croExcluir(p); mapaExcluir(p);
+  croExcluir(p); mapaExcluir(p); revExcluir(p);
   gravar(p._raiz + '/' + p.id, null);
   S.projetos = S.projetos.filter(function (x) { return x !== p; });
   limpaCache(p.id);
@@ -266,7 +267,7 @@ function usrAplicar() {
 }
 var baseOk = function () { return !!(S.base.tabelas && S.base.mao); };
 function ctx() { if (!S.ctx) S.ctx = E.prepare(S.base); return S.ctx; }
-function proj() { return S.projetos.filter(function (p) { return p.id === S.v.pid; })[0] || null; }
+function proj() { var p = S.projetos.filter(function (p) { return p.id === S.v.pid; })[0] || null; var rv = S.v.revVer; if (p && rv && rv.pid === p.id && S.revs && S.revs[p.id + '@' + rv.n]) return S.revs[p.id + '@' + rv.n]; return p; }
 function calc(p) {
   var c = S.cache[p.id];
   if (!c) { var cx = ctxDe(p), res = E.calc(p, cx); c = S.cache[p.id] = { res: res, fin: E.fin(p, cx, res) }; }
@@ -647,11 +648,13 @@ function faixa() {
   if (telaExtra && telaExtra() != null) return '<div class="topo"><div class="tt"><h1>Planning Projects</h1><p>Planejamento e custo de obras · OP Consulting</p></div><div class="topo-d"><span class="quem">' + papel + '</span></div></div>';
   var s = '<div class="topo"><div class="tt"><h1>' + (ok ? NOMES[S.v.aba] || S.v.aba : 'Planning Projects') + '</h1><p>' + (p ? esc(p.nome) + (p.tipo ? ' · ' + esc(tipoNome(p)) + (portePorTipo(p) ? ' ' + esc(nf2.format(portePorTipo(p)).replace(/,00$/, '')) + ' ' + esc(tipoUn(p)) : '') : '') + (p.fase && p.fase !== 'EM PLANEJAMENTO' ? ' · ' + FASES[p.fase] : '') + (temBaseP(p) ? ' · base de preços própria' : '') + (p.liberado ? '' : ' · rascunho') : ok ? 'Nenhum projeto selecionado' : 'Planejamento e custo de obras · OP Consulting') + '</p></div><div class="topo-d">';
   s += '<div class="rproj"><select id="selproj" aria-label="Projeto" ' + h(function (el) { var v = el.value; el.value = S.v.pid || ''; if (!v) { S.v.pid = null; S.v.aba = 'PROJETOS'; agendar(); return; } trocaProj(v, function () { if (S.v.aba === 'PROJETOS') S.v.aba = 'GRA'; }); }) + '><option value="">(selecione o projeto)</option>' +
-    S.projetos.map(function (x) { return '<option value="' + x.id + '"' + (p && p.id === x.id ? ' selected' : '') + '>' + esc(x.nome) + (x.liberado ? '' : ' [rascunho]') + '</option>'; }).join('') + '</select>' +
-    (ehAdmin() && db && ok ? '<div class="row"><button class="lk" ' + h(function () { novoProjeto(); agendar(); }) + '>Novo</button><button class="lk"' + (p ? '' : ' disabled') + ' ' + h(function () { novoProjeto(p); agendar(); }) + '>Duplicar</button>' +
+    S.projetos.map(function (x) { return '<option value="' + x.id + '"' + (p && (p._orig || p.id) === x.id ? ' selected' : '') + '>' + esc(x.nome) + (x.liberado ? '' : ' [rascunho]') + '</option>'; }).join('') + '</select>' +
+    (ehAdmin() && db && ok && !(p && p._rev) ? '<div class="row"><button class="lk" ' + h(function () { novoProjeto(); agendar(); }) + '>Novo</button><button class="lk"' + (p ? '' : ' disabled') + ' ' + h(function () { novoProjeto(p); agendar(); }) + '>Duplicar</button>' +
       '<button class="lk"' + (p ? '' : ' disabled') + ' ' + h(function () { moverProjeto(p, !p.liberado); agendar(); }) + '>' + (p && p.liberado ? 'Tornar rascunho' : 'Liberar') + '</button>' +
       '<button class="lk"' + (p ? '' : ' disabled') + ' ' + h(function () { confirma('Tem certeza que deseja excluir o projeto\n' + p.nome + ' ?\n\nEssa ação não poderá ser desfeita.', function () { excluirProjeto(p); S.v.pid = null; S.v.aba = 'PROJETOS'; }); }) + '>Excluir</button></div>' : '') + '</div>';
+  if (p && ok) s = s.replace(/<\/div>$/, '') + revFaixa(p) + '</div>';
   s += '<span id="save" class="chip" hidden></span><span class="quem">' + papel + '</span></div></div>';
+  if (p && ok && p._rev) s += '<div class="rev-ban"><b>Rev. ' + esc(p._rev) + ' · revisão fixa</b> — somente leitura. ' + bt('Voltar para a revisão em edição (Rev. ' + esc(revAtual(S.projetos.filter(function (x) { return x.id === p._orig; })[0])) + ')', function () { S.v.revVer = null; }, 'lk') + '</div>';
   if (p && ok && !(telaExtra && telaExtra() != null)) {
     var c = calc(p), t = c.fin.total, ne = c.res.erros.length, kp = function (rot, val) { return '<div class="kp">' + KPI_IC + '<div><span>' + rot + '</span><b>' + val + '</b></div></div>'; };
     s += '<div class="kpis">' + kp('Custo total previsto', 'R$ ' + money(t.total)) + kp('Custo médio mensal', 'R$ ' + money(t.mensal)) + kp('Custo médio diário', 'R$ ' + money(t.diario)) +
@@ -696,6 +699,7 @@ function pagina() {
   if (a === 'CMB') f = shCmb;
   if (a === 'SUP') f = shSup;
   if (a === 'USR') f = shUsr;
+  if (a === 'MANUAL') f = shManual;
   if (!f && (/^R_/.test(a) || a === 'HISP')) f = shRelt;
   return f ? f(p) : '';
 }
@@ -2392,7 +2396,7 @@ function croCalendario(p) {
   return function (d) { var D = Math.floor(d), m = (d - D) * 1440, w = 0; perDe(D).forEach(function (x) { w += Math.max(0, Math.min(m, x[1]) - x[0]); }); return (base(D) + w) / 480; };
 }
 var realDe = function (t) { return t.pf != null ? num(t.pf) : num(t.pc); };
-function croRaiz(p) { return p._raiz + '/' + p.id + '/crono'; }
+function croRaiz(p) { return dirP(p) + '/crono'; }
 function croCarregar(p) {
   if (p._cro) return Promise.resolve(p._cro);
   if (p._croP) return p._croP;
@@ -4359,7 +4363,7 @@ function relKpiCtl(p, R, outAoa) {
    Por enquanto existe o mapa Geral; mapas de projeto e de execução serão ligados às atividades depois.
    Dados: projetos/<id>/mapas/<mapa>[_N] — { cam: [camadas], st: [estilos], fs: [elementos] }; resumo em p.mapas[mapa]. */
 var MAPAS_TIPOS = [['geral', 'Geral', 'Layout geral do empreendimento']];
-function mapaRaiz(p) { return p._raiz + '/' + p.id + '/mapas'; }
+function mapaRaiz(p) { return dirP(p) + '/mapas'; }
 /* leitor de ZIP nativo (KMZ = ZIP com o KML dentro), sem biblioteca externa */
 function zipKml(buf) {
   var dv = new DataView(buf), u8 = new Uint8Array(buf), i, eocd = -1;
@@ -4645,7 +4649,7 @@ function janelas() {
       (m.sim ? bt('SIM', function () { var f = m.sim; S.v.msg = null; f(); agendar(); }) + bt('NÃO', fechar, 'cz') : '<button id="msg-ok" class="bt" ' + h(fechar) + '>OK</button>') + '</div>', 420, fechar);
   }
   if (!d) return '';
-  return { sobre: dlgSobre, ativ: dlgAtiv, repl: dlgRepl, filtro: dlgFiltro, erros: dlgErros, exp: dlgExp, impx: dlgImpx, impcpu: dlgImpCpu, croCpu: dlgCroCpu, croImp: dlgCroImp, usr: dlgUsr, proc: dlgProc, supIt: dlgSupIt, supNovo: dlgSupNovo }[d.tipo](d);
+  return { sobre: dlgSobre, ativ: dlgAtiv, repl: dlgRepl, filtro: dlgFiltro, erros: dlgErros, exp: dlgExp, impx: dlgImpx, impcpu: dlgImpCpu, croCpu: dlgCroCpu, croImp: dlgCroImp, usr: dlgUsr, proc: dlgProc, supIt: dlgSupIt, supNovo: dlgSupNovo, rev: dlgRev }[d.tipo](d);
 }
 function resultadoAtualizar() {
   var p = proj(); if (!p) return;
@@ -4858,7 +4862,7 @@ function dlgExp(d) {
 }
 
 /* ================= início ================= */
-window.__custo = { S: S, render: render, nivelAba: nivelAba, nivelProj: nivelProj, podeEditar: podeEditar, podeGravar: podeGravar, proj: proj, zipUm: zipUm, croXml: croXml, relRecursos: relRecursos, idrEfetivo: idrEfetivo, cpuDados: cpuDados, cpuCalc: cpuCalc, croRecriarCpus: croRecriarCpus, croCarregar: croCarregar, croGerarFin: croGerarFin, croDeFin: croDeFin, croCompletarLb: croCompletarLb, croDistribuir: croDistribuir, croRemoverChaves: croRemoverChaves, croRecriarCpus2: null, salvarBase: salvarBase, salvarMeta: salvarMeta, apagarAtiv: apagarAtiv, cpuChaves: cpuChaves, croCalc: croCalc, croResultado: croResultado, calc: calc, novoProjeto: novoProjeto, proj: proj, cfgFalta: cfgFalta, croGerarPadrao: croGerarPadrao, croLerXml: croLerXml, croGravarTudo: croGravarTudo, croParam: croParam, supCalc: supCalc };
+window.__custo = { S: S, render: render, salvarMeta: salvarMeta, GRUPOS_ABAS: GRUPOS_ABAS, NOMES: NOMES, nivelAba: nivelAba, nivelProj: nivelProj, podeEditar: podeEditar, podeGravar: podeGravar, proj: proj, zipUm: zipUm, croXml: croXml, relRecursos: relRecursos, idrEfetivo: idrEfetivo, cpuDados: cpuDados, cpuCalc: cpuCalc, croRecriarCpus: croRecriarCpus, croCarregar: croCarregar, croGerarFin: croGerarFin, croDeFin: croDeFin, croCompletarLb: croCompletarLb, croDistribuir: croDistribuir, croRemoverChaves: croRemoverChaves, croRecriarCpus2: null, salvarBase: salvarBase, salvarMeta: salvarMeta, apagarAtiv: apagarAtiv, cpuChaves: cpuChaves, croCalc: croCalc, croResultado: croResultado, calc: calc, novoProjeto: novoProjeto, proj: proj, cfgFalta: cfgFalta, croGerarPadrao: croGerarPadrao, croLerXml: croLerXml, croGravarTudo: croGravarTudo, croParam: croParam, supCalc: supCalc };
 temaAplica(); render();
 carregar().then(function () {
   /* projetos antigos: passam a ter a própria lista de grupos de atividade */
@@ -4878,7 +4882,7 @@ var RDO_SEM = ['Domingo', 'Segunda-Feira', 'Terça-Feira', 'Quarta-Feira', 'Quin
 var RDO_TEMPO = ['Claro', 'Parcialmente nublado', 'Nublado', 'Chuvoso', 'Garoa', 'Tempestade'];
 var RDO_COND = ['Praticável', 'Impraticável'];
 var KDIA = { k: function (d) { return Math.floor(d); }, ini: function (d) { return Math.floor(d); }, prox: function (x) { return x + 1; } };
-function rdoRaiz(p) { return p._raiz + '/' + p.id + '/rdo'; }
+function rdoRaiz(p) { return p._raiz + '/' + (p._orig || p.id) + '/rdo'; }
 function rdoId(D) { var y = E.ymd(D); return 'd' + y[0] + ('0' + (y[1] + 1)).slice(-2) + ('0' + y[2]).slice(-2); }
 function rdoHoje() { var n = new Date(); return Math.round(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate()) / 864e5); }
 function rdoCarregar(p) {
@@ -6608,7 +6612,7 @@ var USR_NIV = { E: 'Editar', V: 'Visualizar', '': 'Sem acesso' };
 function usrSlug(em) { return 'u-' + String(em || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80); }
 function usrSalvar(u) { var d = {}; Object.keys(u).forEach(function (k) { if (k !== 'id' && k.charAt(0) !== '_') d[k] = u[k]; }); gravar('usuarios/' + u.id, d); }
 function usrGrupos() {
-  return GRUPOS_ABAS.map(function (g) { return [g[0] || 'Geral', g[1].filter(function (k) { return k !== 'PROJETOS' && USR_ADMIN_ABAS.indexOf(k) < 0 && NOMES[k]; })]; }).filter(function (g) { return g[1].length; });
+  return GRUPOS_ABAS.map(function (g) { return [g[0] || 'Geral', g[1].filter(function (k) { return k !== 'PROJETOS' && k !== 'MANUAL' && USR_ADMIN_ABAS.indexOf(k) < 0 && NOMES[k]; })]; }).filter(function (g) { return g[1].length; });
 }
 function usrNivelSec(u, k) { var v = u.secoes && u.secoes[k] != null ? u.secoes[k] : u.secPadrao == null ? 'V' : u.secPadrao; if (v === 'E' && USR_BANCO_ABAS.indexOf(k) >= 0) v = 'V'; return v || ''; }
 function usrNivelPrj(u, id) { var v = u.projetos && u.projetos[id] != null ? u.projetos[id] : u.projPadrao || ''; return v || ''; }
@@ -6666,6 +6670,257 @@ function shUsr() {
       '<p class="aj">Novos projetos: ' + USR_NIV[u.projPadrao || ''].toLowerCase() + '. Rascunhos só ficam visíveis depois de liberados.</p></div>';
     return '<div class="cs usr">' + cab + '<div class="usr-cols"><div><h4>Seções</h4>' + secs + '</div><div><h4>Projetos</h4>' + prjs + '</div></div></div>';
   }).join('') + (F.length ? '' : '<div class="vazio">Nenhum usuário encontrado.</div>');
+  return s;
+}
+
+
+/* ================= REVISÕES DO PROJETO =================
+   O projeto nasce na Rev. 00, que é a linha de base inicial. "Nova revisão" congela a revisão em edição
+   (cópia completa em <raiz>/<id>/revs/<NN>: dados do projeto, atividades, base própria, cronograma, mapas) e abre a seguinte.
+   Revisões fixas não podem ser alteradas: abrem só para leitura, podem ser duplicadas para teste (novo projeto em rascunho)
+   ou restauradas (o conteúdo delas vira a próxima revisão). O RDO é um registro diário e não muda com a revisão.
+   Meta: p.rev = { atual: 'NN', lista: [{ n, criada, por, obs }] }. */
+var REV_SUB = ['ativ', 'base', 'crono', 'mapas'];
+function revAtual(p) { return (p && p.rev && p.rev.atual) || '00'; }
+function revLista(p) { return (p && p.rev && p.rev.lista) || []; }
+function revNum(n) { return ('0' + n).slice(-2); }
+function revFaixa(p) {
+  var base = p._rev ? S.projetos.filter(function (x) { return x.id === p._orig; })[0] : p, rot = p._rev ? 'Rev. ' + p._rev + ' · fixa' : 'Rev. ' + revAtual(base) + ' · em edição';
+  return '<div class="row rev-row"><button class="rev-bt' + (p._rev ? ' fixa' : '') + '" data-tip="Revisões do projeto" ' + h(function () { S.v.dlg = { tipo: 'rev' }; agendar(); }) + '>' + rot + ' ▾</button>' +
+    (ehAdmin() && db && !p._rev ? '<button class="lk" data-tip="Congela a revisão atual e abre a próxima" ' + h(function () { S.v.dlg = { tipo: 'rev', nova: { obs: '' } }; agendar(); }) + '>Nova revisão</button>' : '') + '</div>';
+}
+/* espera a fila de gravação esvaziar (para copiar o que já está no servidor) */
+function revEsperaFila() {
+  fila.forEach(function (q, k) { if (q.timer) { clearTimeout(q.timer); q.timer = null; descarregar(k); } });
+  return new Promise(function (ok, nok) { var t0 = Date.now(); (function ve() { if (!fila.size) return ok(); if (Date.now() - t0 > 90000) return nok(new Error('as alterações pendentes ainda não foram salvas')); setTimeout(ve, 300); })(); });
+}
+/* copia os documentos de uma pasta de projeto para outra (subcoleções; o documento principal é tratado por quem chama) */
+function revCopiar(de, para, apagar) {
+  var tarefas = [];
+  return Promise.all(REV_SUB.map(function (sc) {
+    return db.collection(de + '/' + sc).get().then(function (r) { r.docs.forEach(function (d) { tarefas.push([para + '/' + sc + '/' + d.id, d.data()]); }); }, function () { });
+  })).then(function () {
+    if (!apagar) return;
+    return Promise.all(REV_SUB.map(function (sc) {
+      return db.collection(para + '/' + sc).get().then(function (r) { var novos = {}; tarefas.forEach(function (t) { novos[t[0]] = 1; }); r.docs.forEach(function (d) { var k = para + '/' + sc + '/' + d.id; if (!novos[k]) tarefas.push([k, null]); }); }, function () { });
+    }));
+  }).then(function () {
+    var i = 0;
+    var um = function () { if (i >= tarefas.length) return Promise.resolve(); var t = tarefas[i++]; return (t[1] === null ? db.doc(t[0]).delete() : db.doc(t[0]).set(t[1])).then(um); };
+    return Promise.all([um(), um(), um(), um()]).then(function () { return tarefas.length; });
+  });
+}
+function revProc(prom, fim) {
+  S.v.dlg = { tipo: 'proc' }; render();
+  return prom.then(function (r) { S.v.dlg = null; if (fim) fim(r); agendar(); }, function (e) { S.v.dlg = null; msgbox('ERRO!', 'Não foi possível concluir: ' + ((e && e.message) || e), 'crit'); });
+}
+function revCriar(p, obs) {
+  var n = revAtual(p), dst = dirP(p) + '/revs/' + n, item = { n: n, criada: new Date().toISOString(), por: S.papel.nome || S.papel.email || '', obs: obs || '' };
+  return revEsperaFila().then(function () { return revCopiar(dirP(p), dst); }).then(function () {
+    var m = metaDe(p); m.rev = { atual: n, lista: revLista(p).concat([item]) };
+    return db.doc(dst).set({ n: n, criada: item.criada, por: item.por, obs: item.obs, meta: m });
+  }).then(function () {
+    p.rev = { atual: revNum(+n + 1), lista: revLista(p).concat([item]) }; salvarMeta(p);
+    return item;
+  });
+}
+function revAbrir(p, n) {
+  var k = p.id + '@' + n; S.revs = S.revs || {};
+  if (S.revs[k]) { S.v.revVer = { pid: p.id, n: n }; return Promise.resolve(); }
+  var dir = dirP(p) + '/revs/' + n, v;
+  return db.doc(dir).get().then(function (d) {
+    if (!d) throw new Error('a Rev. ' + n + ' não foi encontrada');
+    v = clone(d.data().meta || {}); v.id = k; v._dir = dir; v._raiz = p._raiz; v._orig = p.id; v._rev = n; v.liberado = p.liberado; v.atividades = [];
+    return db.collection(dir + '/ativ').get();
+  }).then(function (as) {
+    as.docs.forEach(function (x) { var a = clone(x.data()); a.id = x.id; a.linhas = a.linhas || []; v.atividades.push(a); });
+    if (!v.basePropria) return;
+    return db.collection(dir + '/base').get().then(function (bs) { if (bs.docs.length) { v._base = {}; bs.docs.forEach(function (x) { v._base[x.id] = clone(x.data()); }); } });
+  }).then(function () { S.revs[k] = v; S.v.revVer = { pid: p.id, n: n }; });
+}
+/* duplica a revisão (ou a revisão em edição) como um projeto de teste, em rascunho */
+function revDuplicar(p, n) {
+  var src = n == null ? dirP(p) : dirP(p) + '/revs/' + n, id = uid(), dst = 'rascunhos/' + id, meta;
+  return revEsperaFila().then(function () { return n == null ? { meta: metaDe(p) } : db.doc(src).get().then(function (d) { return d.data(); }); }).then(function (d) {
+    meta = clone(d.meta); meta.nome = (meta.nome || 'Projeto') + ' – TESTE Rev. ' + (n == null ? revAtual(p) : n); meta.liberado = false; meta.rev = { atual: '00', lista: [], origem: { projeto: p.nome, n: n == null ? revAtual(p) : n } };
+    return revCopiar(src, dst);
+  }).then(function () { return db.doc(dst).set(meta); }).then(function () {
+    var q = clone(meta); q.id = id; q._raiz = 'rascunhos'; q.atividades = [];
+    return db.collection(dst + '/ativ').get().then(function (as) { as.docs.forEach(function (x) { var a = clone(x.data()); a.id = x.id; a.linhas = a.linhas || []; q.atividades.push(a); }); })
+      .then(function () { if (!q.basePropria) return; return db.collection(dst + '/base').get().then(function (bs) { if (bs.docs.length) { q._base = {}; bs.docs.forEach(function (x) { q._base[x.id] = clone(x.data()); }); } }); })
+      .then(function () { S.projetos.push(q); S.projetos.sort(function (a, b) { return String(a.nome).localeCompare(String(b.nome)); }); S.v.revVer = null; S.v.pid = id; return q; });
+  });
+}
+/* restaura uma revisão fixa: congela a revisão em edição e copia o conteúdo da fixa para a nova revisão */
+function revRestaurar(p, n) {
+  var dir = dirP(p), rv;
+  return revCriar(p, 'Congelada antes de restaurar a Rev. ' + n).then(function () { return revEsperaFila(); })
+    .then(function () { return db.doc(dir + '/revs/' + n).get(); }).then(function (d) { rv = d.data(); return revCopiar(dir + '/revs/' + n, dir, true); })
+    .then(function () {
+      var m = clone(rv.meta || {}); m.rev = clone(p.rev); m.rev.restaurada = { de: n, em: new Date().toISOString() }; m.liberado = p.liberado; m.nome = p.nome;
+      return db.doc(dir).set(m);
+    }).then(function () { S.v.revVer = null; S.revs = {}; S.pronto = false; return lerTudo(); }).then(function () { S.pronto = true; });
+}
+function revMover(p, antigo) {
+  revLista(p).forEach(function (r) {
+    var de = antigo + '/' + p.id + '/revs/' + r.n, para = dirP(p) + '/revs/' + r.n;
+    db.doc(de).get().then(function (d) { if (!d) return; return db.doc(para).set(d.data()).then(function () { return revCopiar(de, para); }).then(function () { return revApagarDir(de); }); }).catch(function (e) { console.error('revisão', r.n, e); });
+  });
+}
+function revApagarDir(dir) {
+  return Promise.all(REV_SUB.map(function (sc) { return db.collection(dir + '/' + sc).get().then(function (r) { return Promise.all(r.docs.map(function (d) { return db.doc(dir + '/' + sc + '/' + d.id).delete(); })); }, function () { }); }))
+    .then(function () { return db.doc(dir).delete(); });
+}
+function revExcluir(p) { revLista(p).forEach(function (r) { revApagarDir(dirP(p) + '/revs/' + r.n).catch(function () { }); }); }
+function dlgRev(d) {
+  var p0 = proj(), p = p0 && p0._rev ? S.projetos.filter(function (x) { return x.id === p0._orig; })[0] : p0, fechar = function () { S.v.dlg = null; agendar(); };
+  if (!p) return '';
+  var adm = ehAdmin() && !!db, L = revLista(p).slice().reverse(), at = revAtual(p), vendo = p0 && p0._rev;
+  if (d.nova) {
+    return janela('Nova revisão do projeto', '<p>A <b>Rev. ' + at + '</b> será congelada como está agora (dados do projeto, atividades, cronograma, composições, mapas e suprimentos) e passará a ser só leitura. O projeto continua na <b>Rev. ' + revNum(+at + 1) + '</b>.</p>' +
+      '<label class="rev-obs">Motivo / observação da Rev. ' + at + '<textarea rows="3" placeholder="ex.: Linha de base contratual aprovada pelo cliente" data-live ' + h(function (el) { d.nova.obs = el.value; }) + '>' + esc(d.nova.obs || '') + '</textarea></label>' +
+      '<div class="bts">' + bt('CRIAR REV. ' + revNum(+at + 1), function () { revProc(revCriar(p, d.nova.obs), function (it) { aviso('Rev. ' + it.n + ' congelada. O projeto agora está na Rev. ' + revAtual(p) + '.'); }); }) + bt('CANCELAR', fechar, 'cz') + '</div>', 520, fechar);
+  }
+  var linha = function (r) {
+    var aberta = vendo && p0._rev === r.n;
+    return '<tr' + (aberta ? ' class="on"' : '') + '><td><b>Rev. ' + esc(r.n) + '</b><small>fixa</small></td><td>' + fdh(r.criada) + (r.por ? '<small>' + esc(r.por) + '</small>' : '') + '</td><td>' + esc(r.obs || '—') + '</td><td class="rev-ac">' +
+      (aberta ? '<span class="chip">aberta</span>' : '<button class="lk" ' + h(function () { revProc(revAbrir(p, r.n), function () { S.v.dlg = null; }); }) + '>Abrir</button>') +
+      (adm ? '<button class="lk" data-tip="Cria um projeto de teste (rascunho) com o conteúdo desta revisão" ' + h(function () { revProc(revDuplicar(p, r.n), function (q) { aviso('Projeto de teste criado: ' + q.nome); }); }) + '>Duplicar</button>' +
+        '<button class="lk" data-tip="Congela a revisão em edição e traz o conteúdo desta revisão para a próxima" ' + h(function () { confirma('Restaurar a Rev. ' + r.n + '?\n\nA Rev. ' + at + ' (em edição) será congelada como está, e o conteúdo da Rev. ' + r.n + ' passa a ser a Rev. ' + revNum(+at + 1) + ', em edição.', function () { revProc(revRestaurar(p, r.n), function () { S.v.dlg = null; aviso('Rev. ' + r.n + ' restaurada como Rev. ' + revAtual(S.projetos.filter(function (x) { return x.id === p.id; })[0]) + '.'); }); }); }) + '>Restaurar</button>' : '') + '</td></tr>';
+  };
+  var s = '<p class="aj">A Rev. 00 é a linha de base inicial. Cada nova revisão congela a anterior, que não pode mais ser alterada.</p>' +
+    '<div class="tw"><table class="rev-t"><thead><tr><th>Revisão</th><th>Criada em</th><th>Motivo / observação</th><th></th></tr></thead><tbody>' +
+    '<tr' + (vendo ? '' : ' class="on"') + '><td><b>Rev. ' + at + '</b><small>em edição</small></td><td>—</td><td>Revisão atual do projeto</td><td class="rev-ac">' + (vendo ? '<button class="lk" ' + h(function () { S.v.revVer = null; S.v.dlg = null; agendar(); }) + '>Abrir</button>' : '<span class="chip">aberta</span>') +
+    (adm ? '<button class="lk" data-tip="Cria um projeto de teste (rascunho) com o conteúdo atual" ' + h(function () { revProc(revDuplicar(p, null), function (q) { aviso('Projeto de teste criado: ' + q.nome); }); }) + '>Duplicar</button>' : '') + '</td></tr>' +
+    L.map(linha).join('') + '</tbody></table></div>' +
+    (adm && !vendo ? '<div class="bts">' + bt('NOVA REVISÃO', function () { d.nova = { obs: '' }; }) + bt('FECHAR', fechar, 'cz') + '</div>' : '<div class="bts">' + bt('FECHAR', fechar, 'cz') + '</div>');
+  return janela('Revisões · ' + esc(p.nome), s, 760, fechar);
+}
+
+
+/* ================= MANUAL DO USUÁRIO (Sistema) =================
+   Para cada item do menu: o que é (resumo), como funciona (detalhado) e o fluxo do processo. */
+NOMES.MANUAL = 'Manual do usuário'; ABAS.push(['MANUAL', '#1769e8']);
+ICA.MANUAL = '<path d="M5 4.5h9.5a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h9.5M9 8.5h5M9 11h3"/>';
+(function () { GRUPOS_ABAS.forEach(function (g) { if (g[0] === 'Sistema' && g[1].indexOf('MANUAL') < 0) g[1].unshift('MANUAL'); }); })();
+var MANUAL_GERAL = {
+  fluxo: ['Cadastrar o projeto (Dados do projeto)', 'Gerar ou importar o cronograma', 'Relacionar composições (CPU) às atividades', 'Dimensionar indireto e riscos', 'Congelar a Rev. 00 (linha de base)', 'Lançar avanço e RDO no dia a dia', 'Acompanhar KPI, suprimentos e custos', 'Emitir relatórios', 'Nova revisão quando houver replanejamento'],
+  texto: ['O sistema organiza o planejamento e o custo de cada obra em um só lugar. O cronograma é a espinha dorsal: as composições (CPU) dão custo às atividades, os bancos de dados dão preço aos insumos, e o avanço lançado no dia a dia mede o realizado contra a linha de base.',
+    'Bancos de dados, composições e cadastros do sistema são comuns a todos os projetos e só os administradores alteram. Os dados de cada projeto ficam no próprio projeto. O que cada pessoa vê e edita é definido em Sistema › Cadastro de usuários.']
+};
+var MANUAL_REV = {
+  titulo: 'Revisões do projeto (Rev. 00, 01, 02…)',
+  resumo: 'Todo projeto nasce na Rev. 00, a linha de base inicial. "Nova revisão" congela a revisão em edição e abre a seguinte. Revisões fixas não podem ser alteradas: só abrir, duplicar para teste ou restaurar.',
+  det: ['O controle fica no topo da tela, ao lado do projeto: o botão "Rev. NN · em edição" abre a lista de revisões e "Nova revisão" (administradores) cria a próxima.',
+    'Ao criar uma revisão, a revisão em edição é copiada por inteiro (dados do projeto, atividades, base de preços própria, cronograma com composições, avanço lançado, mapas e mapa de suprimentos) e fica só leitura. Informe o motivo (ex.: "Linha de base contratual", "Replanejamento após chuvas").',
+    'Abrir uma revisão fixa mostra o projeto exatamente como estava, em modo leitura, com uma faixa amarela no topo. "Voltar para a revisão em edição" retorna ao trabalho.',
+    'Duplicar cria um projeto de teste em rascunho (nome com "TESTE Rev. NN") para simulações e validações, sem mexer na numeração do projeto original.',
+    'Restaurar congela a revisão em edição e traz o conteúdo da revisão escolhida como próxima revisão. Nada é apagado: a revisão que estava em edição também fica guardada.',
+    'O RDO é registro diário da obra e é o mesmo em todas as revisões.'],
+  fluxo: ['Projeto criado: Rev. 00 em edição', 'Cadastro e planejamento completos', 'Nova revisão: Rev. 00 fica fixa', 'Trabalho segue na Rev. 01', 'Replanejamento aprovado: Nova revisão', 'Rev. 01 fixa, trabalho na Rev. 02']
+};
+var MANUAL = {
+  PROJETOS: { r: 'Carteira de projetos: lista todos os projetos com tipo, fase, prazo, custo e venda, e é o ponto de partida para abrir, criar, liberar, exportar e importar projetos.',
+    d: ['Clique em um projeto para abri-lo; o nome e a revisão aparecem no topo da tela em todas as guias.', 'Novo cria um projeto em rascunho (só administradores veem rascunhos). Liberar publica o projeto para os usuários com acesso a ele; Tornar rascunho recolhe.', 'Duplicar copia o projeto aberto. Excluir apaga o projeto e as revisões (não pode ser desfeito).', 'Baixar backup e Restaurar backup salvam e recarregam projetos em arquivo. Exportar tudo (Supabase) gera o arquivo completo para a versão com login.'],
+    f: ['Novo projeto (rascunho)', 'Preencher Dados do projeto', 'Montar cronograma e custos', 'Liberar para a equipe', 'Acompanhar pela carteira'] },
+  CONFIG: { r: 'Cadastro do projeto: tipo de obra, identificação, contrato, contratante, local, prazos, calendário, clima, reajustes e BDI. É daqui que sai o cronograma padrão.',
+    d: ['O primeiro item é o tipo do projeto (subestação, eólico, parque solar, estrada, edificação, ETE…). Ele define o modelo de cronograma padrão e os dados técnicos pedidos (ex.: MWp e estruturas no solar; frentes, km e aerogeradores no eólico).', 'Os quadros Contratante e Local alimentam o RDO, os relatórios e o Sobre. Responsáveis, prazo e valor guardam datas e valor do contrato; BDI contratual calcula o BDI pela fórmula escolhida.', 'Calendário (jornada, feriados, paralisações) e clima definem os dias úteis usados em todo o planejamento.', 'Gerar cronograma padrão monta a EAP OP Consulting com marcos, engenharia, suprimentos, construção, comissionamento e encerramento a partir dos dados técnicos; a lista "falta preencher" mostra o que ainda impede a geração.'],
+    f: ['Escolher o tipo do projeto', 'Preencher identificação, contrato e local', 'Informar dados técnicos do tipo', 'Conferir calendário e BDI', 'Gerar cronograma padrão'] },
+  GRA: { r: 'Painel de gráficos: visão rápida do projeto com curva S (previsto × realizado), resumo econômico, custos por grupo e clima.',
+    d: ['Os números vêm do cronograma, do avanço lançado e do custo calculado; não há digitação nesta guia.', 'Use para reuniões de acompanhamento e para conferir rapidamente se o projeto está adiantado ou atrasado.'],
+    f: ['Cronograma e avanço atualizados', 'Painel recalcula sozinho', 'Ler curva S e desvios', 'Detalhar nos relatórios'] },
+  INP: { r: 'Planilha de avanço: lançamento diário das quantidades executadas em cada atividade do cronograma.',
+    d: ['Cada linha é uma atividade de execução com quantidade de projeto e unidade; cada coluna é um dia do mês.', 'O avanço lançado calcula o % físico, o início e o término reais das tarefas no Cronograma físico, e alimenta RDO, KPI, Quadro de saldos e curva S.', 'Atividades extras podem ser incluídas quando não existem no cronograma.'],
+    f: ['Produção do dia em campo', 'Lançar quantidade na data', '% físico e datas reais atualizam', 'RDO, KPI e curva S refletem o avanço'] },
+  RDO: { r: 'RDO – Diário de obra: um relatório por dia, montado automaticamente com cabeçalho, efetivo, equipamentos e atividades executadas.',
+    d: ['Cabeçalho (número, data, contrato, prazos) vem dos dados do projeto.', 'Mão de obra e equipamentos diretos = produção do dia na Planilha de avanço × composições relacionadas; indiretos = equipes de permanência do mês.', 'Clima, ocorrências, comentários e ajustes de efetivo são digitados. Emitir congela o relatório do dia.'],
+    f: ['Avanço do dia lançado', 'Abrir o RDO da data', 'Conferir efetivo e equipamentos', 'Registrar clima e ocorrências', 'Emitir (congela)'] },
+  CRO: { r: 'Cronograma físico: o cronograma do projeto (importado do MS Project ou gerado pelo padrão), com linha de base, % físico, curva S e venda × custo × resultado.',
+    d: ['Importar MS Project lê arquivos XML (o .mpp pode ser salvo como XML no MS Project). As tarefas são reorganizadas na EAP padrão OP Consulting.', 'Avanço real = % físico concluído ponderado pelo custo da linha de base; previsto = linha de base no calendário do projeto.', 'Cada macroatividade recebe composições (CPU) com quantidades, que distribuem o custo direto no tempo.', 'Exportar gera XML do MS Project com linha de base, % físico, vínculos e calendários.'],
+    f: ['Gerar padrão ou importar XML', 'Conferir EAP e vínculos', 'Relacionar CPUs (Relacionamento)', 'Congelar linha de base (revisão)', 'Atualizar avanço e replanejar'] },
+  SUP: { r: 'Mapa de suprimentos: lista o que precisa ser comprado ou fornecido, quando é necessário e quando precisa ser pedido, a partir do cronograma.',
+    d: ['A data de necessidade vem da primeira atividade que consome o item; a data limite de pedido desconta o prazo (lead time) da categoria e a folga.', 'Responsabilidade (contratada ou contratante), fornecedor, status, datas e quantidades informadas ficam registrados com histórico.', 'Painel com alertas (atrasado, crítico, alta), tabela, linha do tempo (Gantt) e exportação Excel e PDF.'],
+    f: ['Cronograma com atividades e fornecimentos', 'Mapa calcula necessidade e data de pedido', 'Definir prazos e responsáveis', 'Atualizar status das compras', 'Tratar alertas'] },
+  QDS: { r: 'Quadro de saldos: matriz atividades × áreas (subcampos, subparques, frentes) mostrando o que está concluído, em andamento ou não iniciado.',
+    d: ['Usa o cronograma e o avanço lançado; filtre por grupo da EAP e escolha o tipo de área.', 'Os totais mostram o percentual de frentes em cada situação. Exporta para Excel.'],
+    f: ['Avanço lançado', 'Escolher grupo e áreas', 'Ler saldos por área', 'Direcionar equipes (Lean)'] },
+  R_KPI: { r: 'Indicadores físicos (KPI): avanço físico por atividade, comparando previsto e realizado.',
+    d: ['Mostra, por atividade, quantidade prevista, executada e o índice de desempenho no período.', 'Base para a reunião semanal de produção.'],
+    f: ['Avanço lançado', 'Escolher período', 'Comparar previsto × realizado', 'Definir ações'] },
+  IDR: { r: 'Indireto: centros de custo indiretos dimensionados por permanência (gerência, administração, alojamento, TI…), somados ao direto, aos riscos e ao BDI para chegar ao preço total.',
+    d: ['Criar estrutura padrão monta 6 centros de custo. Cada centro recebe mão de obra indireta, veículos, alojamentos e despesas com período de permanência.', 'Preço total = (direto + indireto + reserva de riscos) × (1 + BDI).'],
+    f: ['Criar centros de custo', 'Informar equipes e permanência', 'Conferir indireto mensal', 'Preço total atualiza'] },
+  RSK: { r: 'Gestão de riscos: registro de riscos com probabilidade × impacto, resposta, responsável e reserva de contingência.',
+    d: ['Cada risco tem probabilidade, impacto, valor, resposta, responsável e situação (aberto, encerrado, ocorreu).', 'A matriz mostra os riscos em aberto; a reserva de contingência é a soma de probabilidade × impacto e entra no preço total do Indireto.', 'Riscos encerrados liberam reserva; riscos ocorridos viram custo.'],
+    f: ['Identificar o risco', 'Avaliar probabilidade e impacto', 'Definir resposta e responsável', 'Acompanhar', 'Encerrar ou registrar ocorrência'] },
+  RELA: { r: 'Relacionamento: liga as composições (CPU) às atividades da EAP, com quantidades, formando o custo direto do projeto.',
+    d: ['À esquerda, os itens da EAP; ao lado, as composições relacionadas à atividade selecionada (quantidade editável).', 'A biblioteca permite buscar e relacionar composições. Composições da biblioteca não são editadas aqui; use "Criar cópia especial para este projeto" para ajustar.', 'Cada mudança recalcula o custo direto no Cronograma financeiro.'],
+    f: ['Selecionar atividade da EAP', 'Buscar composição na biblioteca', 'Relacionar e informar quantidade', 'Custo direto recalcula'] },
+  FIN: { r: 'Cronograma financeiro: custo do projeto mês a mês, somando o custo direto (CPU × cronograma) e as equipes de permanência.',
+    d: ['As equipes de permanência (mão de obra, veículos, materiais, serviços) são cadastradas em Atividades, com início e término.', 'Replanejar desloca períodos. Exportar dados e a Lista de erros ajudam a conferir.'],
+    f: ['Custos diretos do Relacionamento', 'Cadastrar permanências', 'Conferir mês a mês', 'Replanejar quando necessário'] },
+  R_PC: { r: 'Planilha de custo: custo por item da EAP aberto em composições e em mão de obra, equipamentos, materiais, serviços e indireto.',
+    d: ['Filtre por período e atividade; exporte para Excel.'], f: ['Escolher filtros', 'Conferir custos por EAP', 'Exportar'] },
+  R_PV: { r: 'Planilha de venda: custo × (1 + BDI) comparado à venda da linha de base, com a composição do BDI.',
+    d: ['Mostra a margem por item da EAP e o BDI usado. Exporta para Excel.'], f: ['BDI do projeto definido', 'Abrir planilha', 'Comparar custo e venda', 'Exportar'] },
+  R_MATV: { r: 'Consumo de materiais (R$): valor dos materiais e insumos consumidos por mês, a partir das composições e do cronograma.',
+    d: ['Agrupe por material, grupo ou atividade e exporte.'], f: ['CPUs relacionadas', 'Escolher período e agrupamento', 'Exportar'] },
+  CPU: { r: 'CPU – Composições do preço unitário: biblioteca de composições (SINAPI, SICRO, DER-MG, SUDECAP, SEINFRA e próprias), com insumos e coeficientes.',
+    d: ['Cada composição guarda só o código do insumo e o coeficiente; o preço vem dos bancos (Mão de obra, Veículos e máquinas, Materiais, Serviços).', 'Filtros por origem, grupo e busca; ranking das composições mais usadas nos projetos.', 'Somente administradores criam ou alteram composições; os demais usuários só visualizam.'],
+    f: ['Buscar ou criar composição', 'Informar insumos e coeficientes', 'Preço vem dos bancos', 'Relacionar aos projetos'] },
+  MAO: { r: 'Mão de obra: funções com salário, encargos, benefícios e custo mensal e por hora.',
+    d: ['O custo usa encargos e parâmetros de Configurações. Lista sempre em ordem alfabética. Importa e exporta Excel. Só administradores alteram.'], f: ['Cadastrar função e salário', 'Encargos aplicados', 'Custo usado nas CPUs e permanências'] },
+  VEM: { r: 'Veículos e máquinas: equipamentos com custo mensal, mobilização, combustível e consumo (L/h).',
+    d: ['O consumo de diesel (L/h) deste banco alimenta os relatórios de diesel e combustíveis. Ordem alfabética; importa e exporta Excel. Só administradores alteram.'], f: ['Cadastrar equipamento', 'Informar custo e consumo', 'Usado em CPUs, permanências e diesel'] },
+  MAT: { r: 'Materiais e insumos: cadastro único de materiais, ferramentas e insumos com unidade e preço.',
+    d: ['Ordem alfabética; importa e exporta Excel. Só administradores alteram.'], f: ['Cadastrar item e preço', 'Usado em CPUs e permanências'] },
+  IND: { r: 'Insumos: banco de insumos indiretos (usado apenas em projetos com base própria antiga, quando materiais e insumos são separados).',
+    d: ['Na base geral os insumos ficam em Materiais e insumos.'], f: ['Cadastrar insumo', 'Usado nas permanências'] },
+  SER: { r: 'Serviços: serviços terceirizados com unidade e preço.',
+    d: ['Ordem alfabética; importa e exporta Excel. Só administradores alteram.'], f: ['Cadastrar serviço e preço', 'Usado em CPUs e permanências'] },
+  R_KPC: { r: 'Controle de KPI: curva S por atividade geral (linha de base, replanejamento, realizado, alvo e previsão), no layout oficial.',
+    d: ['Atividade geral = tarefas de mesmo nome em vários locais (subcampos, parques…). Cada uma tem observações e indicadores ▲ ■ ▼.'], f: ['Avanço lançado', 'Escolher atividade geral', 'Ler tendência e previsão', 'Registrar observações'] },
+  LOB: { r: 'Linhas de balanço: ritmo de execução por local para cada grupo da EAP, com linha de base, cronograma atual e executado.',
+    d: ['Tabela de ritmos (linha de base, atual, real) e previsão de término pelo ritmo real.'], f: ['Escolher grupo e locais', 'Comparar ritmos', 'Ajustar equipes'] },
+  MAP: { r: 'Mapas: desenho do empreendimento (KMZ/KML) sobre o mapa do OpenStreetMap, por camadas.',
+    d: ['Envie o KMZ do projeto; camadas e elementos podem ser ligados e desligados. Fundo © colaboradores do OpenStreetMap.'], f: ['Enviar KMZ/KML', 'Conferir camadas', 'Usar em reuniões e relatórios'] },
+  HISP: { r: 'Histogramas: mão de obra, equipamentos, diesel e consumo de materiais ao longo do tempo.',
+    d: ['Calculados pelas composições × cronograma mais as permanências. Mão de obra e equipamentos arredondados para o inteiro acima.'], f: ['Escolher histograma e período', 'Agrupar por função ou atividade', 'Exportar'] },
+  CMB: { r: 'Diesel e combustíveis: consumo em litros e em reais por mês, por veículo, categoria, combustível ou atividade.',
+    d: ['Usa o consumo L/h do banco Veículos e máquinas e as horas previstas.'], f: ['Escolher período e combustível', 'Agrupar', 'Exportar Excel'] },
+  R_FC: { r: 'Fluxo de caixa: entradas (venda) e saídas (custo) por mês e acumulado.', d: ['Exporta para Excel.'], f: ['Custo e venda calculados', 'Ler saldo mensal e acumulado'] },
+  R_DRE: { r: 'Demonstrativo econômico: venda, impostos, custo direto, indireto, CSLL e IR, total e por ano.', d: ['Impostos e regime (lucro real ou presumido) vêm dos parâmetros do cronograma.'], f: ['Parâmetros definidos', 'Ler resultado por ano', 'Exportar'] },
+  RELS: { r: 'SESMT: EPI, exames (PCMSO), grupos GHE e dimensionamento do SESMT a partir do efetivo previsto.', d: ['Usa o histograma de mão de obra do projeto.'], f: ['Efetivo previsto', 'Gerar relatórios de SST'] },
+  SIS: { r: 'Configurações: preferências (tema, tamanho da letra, idioma), formatos de data, hora e moeda e parâmetros gerais (empresa, encargos).', d: ['Tema e letra valem para o navegador; formatos e parâmetros valem para todos. Parâmetros gerais só administradores alteram.'], f: ['Ajustar preferências', 'Definir parâmetros da empresa'] },
+  DADOS: { r: 'Dados e verificação: recarrega bancos e projetos do servidor, recalcula o projeto aberto e mostra a lista de erros.', d: ['Use quando outra pessoa alterou dados ou para conferir inconsistências antes de emitir relatórios.'], f: ['Atualizar base de dados', 'Atualizar projeto', 'Corrigir a lista de erros'] },
+  CLI: { r: 'Cadastro de clientes e empresas: razão social, CNPJ, contatos e logos usados nos projetos e relatórios.', d: ['Só administradores alteram.'], f: ['Cadastrar empresa e logo', 'Vincular ao projeto'] },
+  USR: { r: 'Cadastro de usuários: define, para cada pessoa, quais seções e quais projetos ela pode editar, só visualizar ou não acessar.',
+    d: ['Cadastre pelo e-mail. Cada seção e cada projeto alterna entre Editar, Visualizar e Sem acesso.', 'Bancos de dados e composições: no máximo visualizar (só administradores editam). Sistema: só administradores.', 'Administrador edita tudo. A regra "Quem não está cadastrado" define o que vê quem não está na lista.'],
+    f: ['Pessoa recebe acesso ao sistema', 'Cadastrar e-mail', 'Marcar seções e projetos', 'Pessoa entra e vê só o liberado'] },
+  MANUAL: { r: 'Este manual.', d: [], f: [] }
+};
+function manFluxo(f) {
+  if (!f || !f.length) return '';
+  return '<ol class="man-fx">' + f.map(function (x, i) { return '<li><span>' + (i + 1) + '</span>' + esc(x) + '</li>'; }).join('') + '</ol>';
+}
+function shManual() {
+  var V = S.v.man || (S.v.man = { q: '', ab: {} }), q = semAcento(V.q || '');
+  var bate = function (k, m) { return !q || semAcento((NOMES[k] || k) + ' ' + m.r + ' ' + m.d.join(' ') + ' ' + m.f.join(' ')).indexOf(q) >= 0; };
+  var s = titulo('MANUAL DO USUÁRIO', '<input type="search" placeholder="Buscar no manual" aria-label="Buscar no manual" value="' + esc(V.q) + '" data-live ' + h(function (el) { V.q = el.value; agendar(); }) + '>' +
+    '<button class="lk" ' + h(function () { var ab = {}; Object.keys(MANUAL).forEach(function (k) { ab[k] = 1; }); ab._rev = 1; V.ab = ab; agendar(); }) + '>Abrir tudo</button><button class="lk" ' + h(function () { V.ab = {}; agendar(); }) + '>Fechar tudo</button>');
+  if (!q) s += '<section class="cs man-geral"><h3>Como o sistema funciona</h3>' + MANUAL_GERAL.texto.map(function (t) { return '<p>' + esc(t) + '</p>'; }).join('') + '<h4>Fluxo geral do projeto</h4>' + manFluxo(MANUAL_GERAL.fluxo) + '</section>';
+  var item = function (k, tit, r, d, f) {
+    var on = !!V.ab[k];
+    return '<article class="man-it' + (on ? ' on' : '') + '"><button class="man-h" aria-expanded="' + on + '" ' + h(function () { V.ab[k] = !V.ab[k]; agendar(); }) + '><b>' + esc(tit) + '</b><span>' + esc(r) + '</span><i>' + (on ? '−' : '+') + '</i></button>' +
+      (on ? '<div class="man-b">' + (d.length ? '<h5>Como funciona</h5><ul>' + d.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') + (f.length ? '<h5>Fluxo do processo</h5>' + manFluxo(f) : '') + '</div>' : '') + '</article>';
+  };
+  var R = MANUAL_REV;
+  if (!q || semAcento(R.titulo + ' ' + R.resumo + R.det.join(' ')).indexOf(q) >= 0) s += '<section class="man-g"><h3>Revisões</h3>' + item('_rev', R.titulo, R.resumo, R.det, R.fluxo) + '</section>';
+  GRUPOS_ABAS.forEach(function (g) {
+    var ks = g[1].filter(function (k) { return MANUAL[k] && k !== 'MANUAL' && bate(k, MANUAL[k]); });
+    if (!ks.length) return;
+    s += '<section class="man-g"><h3>' + esc(g[0] || 'Início') + '</h3>' + ks.map(function (k) { var m = MANUAL[k]; return item(k, NOMES[k] || k, m.r, m.d, m.f); }).join('') + '</section>';
+  });
   return s;
 }
 
