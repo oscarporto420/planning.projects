@@ -206,13 +206,13 @@ function moverProjeto(p, liberado) {
   gravar(p._raiz + '/' + p.id, metaDe(p));
   p.atividades.forEach(function (a) { gravar(p._raiz + '/' + p.id + '/ativ/' + a.id, ativDoc(a)); gravar(antigo + '/' + p.id + '/ativ/' + a.id, null); });
   if (temBaseP(p)) { salvarBaseP(p); apagarBaseP(p, antigo); }
-  croMover(p, antigo); mapaMover(p, antigo); revMover(p, antigo);
+  croMover(p, antigo); mapaMover(p, antigo); revMover(p, antigo); subMover(p, antigo);
   gravar(antigo + '/' + p.id, null);
 }
 function excluirProjeto(p) {
   p.atividades.forEach(function (a) { gravar(p._raiz + '/' + p.id + '/ativ/' + a.id, null); });
   if (temBaseP(p)) apagarBaseP(p);
-  croExcluir(p); mapaExcluir(p); revExcluir(p);
+  croExcluir(p); mapaExcluir(p); revExcluir(p); subExcluir(p);
   gravar(p._raiz + '/' + p.id, null);
   S.projetos = S.projetos.filter(function (x) { return x !== p; });
   limpaCache(p.id);
@@ -701,6 +701,7 @@ function pagina() {
   if (a === 'USR') f = shUsr;
   if (a === 'MANUAL') f = shManual;
   if (a === 'REVC') f = shRevc;
+  if (a === 'FECH') f = shFech;
   if (!f && (/^R_/.test(a) || a === 'HISP')) f = shRelt;
   return f ? f(p) : '';
 }
@@ -6822,7 +6823,7 @@ var MANUAL_REV = {
     'Restaurar congela a revisão em edição e traz o conteúdo da revisão escolhida como próxima revisão. Nada é apagado: a revisão que estava em edição também fica guardada.',
     'O RDO é registro diário da obra e é o mesmo em todas as revisões.',
     'Rotina mensal: atualize o avanço e a data de status, crie a nova revisão e analise o Comparativo de revisões (Custos), que compara cada revisão com a Rev. 00 e com a anterior.'],
-  fluxo: ['Projeto criado: Rev. 00 em edição', 'Cadastro e planejamento completos', 'Nova revisão: Rev. 00 fica fixa (linha de base)', 'Fechamento do mês: avanço e data de status', 'Nova revisão: mês congelado', 'Comparativo × Rev. 00 e × anterior']
+  fluxo: ['Projeto criado: Rev. 00 em edição', 'Cadastro e planejamento completos', 'Nova revisão: Rev. 00 fica fixa (linha de base)', 'Fechamento do mês: avanço, custo real e efetivo', 'Nova revisão: mês congelado', 'Comparativo × Rev. 00 e × anterior']
 };
 var MANUAL = {
   PROJETOS: { r: 'Carteira de projetos: lista todos os projetos com tipo, fase, prazo, custo e venda, e é o ponto de partida para abrir, criar, liberar, exportar e importar projetos.',
@@ -6905,6 +6906,9 @@ var MANUAL = {
   USR: { r: 'Cadastro de usuários: define, para cada pessoa, quais seções e quais projetos ela pode editar, só visualizar ou não acessar.',
     d: ['Cadastre pelo e-mail. Cada seção e cada projeto alterna entre Editar, Visualizar e Sem acesso.', 'Bancos de dados e composições: no máximo visualizar (só administradores editam). Sistema: só administradores.', 'Administrador edita tudo. A regra "Quem não está cadastrado" define o que vê quem não está na lista.'],
     f: ['Pessoa recebe acesso ao sistema', 'Cadastrar e-mail', 'Marcar seções e projetos', 'Pessoa entra e vê só o liberado'] },
+  FECH: { r: 'Fechamento mensal (realizado): lançamento do que realmente aconteceu no mês — custo real direto e indireto e efetivo diário de mão de obra e equipamentos — comparado com o previsto.',
+    d: ['Custo real: cada lançamento tem tipo (direto ou indireto), categoria (mão de obra, equipamentos, materiais, serviços, outros), item da EAP ou centro de custo, descrição/documento e valor.', 'Efetivo real por dia: pessoas (MO direta e indireta) e equipamentos (produção e apoio) presentes em cada dia; a média do mês forma o histograma real, comparado ao previsto de cada função. “Trazer dos RDOs” preenche com os RDOs emitidos; “Copiar lista do mês anterior” repete as linhas.', 'O avanço físico vem da Planilha de avanço. Os cartões mostram avanço acumulado, custo real do mês e acumulado contra o previsto, CPI (valor agregado ÷ custo real) e efetivo médio.', 'Fechar mês trava os lançamentos (administradores podem reabrir). Os dados do realizado são do projeto e valem para todas as revisões; ao criar a revisão do mês, o custo real acumulado, o CPI e o efetivo entram no Comparativo de revisões.'],
+    f: ['Lançar avanço na Planilha de avanço', 'Lançar custos reais do mês', 'Lançar efetivo diário (ou trazer dos RDOs)', 'Conferir previsto × real', 'Fechar mês', 'Criar nova revisão', 'Analisar no Comparativo de revisões'] },
   MANUAL: { r: 'Este manual.', d: [], f: [] }
 };
 function manFluxo(f) {
@@ -6941,7 +6945,7 @@ ICA.REVC = '<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/><path d="M4 9l6-4 6 7 5-
 (function () { GRUPOS_ABAS.forEach(function (g) { if (g[0] === 'Custos' && g[1].indexOf('REVC') < 0) g[1].unshift('REVC'); }); })();
 /* indicadores de uma revisão (a revisão em edição é calculada na hora) */
 function revInd(p) {
-  var pr = p.crono && !p._cro ? croCarregar(p) : Promise.resolve();
+  var pr = Promise.all([p.crono && !p._cro ? croCarregar(p) : null, db ? fechCarregar(p) : null]);
   return pr.then(function () {
     var X = custoResumo(p), c = X.c, o = { em: new Date().toISOString(), dir: X.dir, ind: X.ind, risco: X.risco, bdi: X.bdi, preco: X.venda, custo: X.dir + X.ind + X.risco, mes: { custo: {} }, eap: [] };
     (c.res.months || []).forEach(function (mi, i) { var v = num(c.fin.total.mes[i]); if (v) o.mes.custo[mi] = v; });
@@ -6953,6 +6957,10 @@ function revInd(p) {
       o.mes.vLB = cp(R.mP); o.mes.vAt = cp(R.mT); o.mes.vR = cp(R.mR); o.mes.cd = cp(R.mCD); o.mes.ci = cp(R.mCI);
       p._cro.tasks.forEach(function (t) { if (t.l >= 1 && t.l <= 2 && R.N[t.u]) { var n = R.N[t.u]; o.eap.push({ u: t.u, w: t.w, n: t.n, l: t.l, v: n.v, cd: n.cd, ev: n.ev, pv: n.pv }); } });
     }
+    try {
+      var stMi = o.cro ? miDe(o.cro.st) : null, A = fechAcum(p, stMi), ult = Object.keys(A.meses).map(Number).sort(function (x, y) { return x - y; }).pop();
+      if (A.total || ult != null) o.real = { D: A.D, I: A.I, total: A.total, cpi: A.total && o.cro ? (o.custo - o.risco) * o.cro.ev / A.total : null, mi: ult, efet: ult != null ? A.meses[ult].efet : null, mes: (function () { var m = {}; Object.keys(A.meses).forEach(function (k) { m[k] = A.meses[k].D + A.meses[k].I; }); return m; })() };
+    } catch (e) { console.error(e); }
     return o;
   });
 }
@@ -7021,7 +7029,7 @@ function shRevc(p) {
   cols.push({ n: at, rot: 'Rev. ' + at, data: null, obs: 'em edição', ind: D.atual, fixa: false });
   var semInd = cols.filter(function (c) { return c.fixa && !c.ind && (c.n in D.docs); });
   var sel = V[p.id] != null && cols.some(function (c) { return c.n === V[p.id]; }) ? V[p.id] : at;
-  var iA = cols.map(function (c) { return c.n; }).indexOf(sel), A = cols[iA], B = iA > 0 ? cols[iA - 1] : null, Z = cols[0];
+  var iA = cols.map(function (c) { return c.n; }).indexOf(sel), A = cols[iA], B = iA > 1 ? cols[iA - 1] : null, Z = cols[0];
   var s = titulo('COMPARATIVO DE REVISÕES', '<label class="revc-sel">Revisão analisada <select aria-label="Revisão analisada" ' + h(function (el) { V[p.id] = el.value; agendar(); }) + '>' +
     cols.slice().reverse().map(function (c) { return '<option value="' + c.n + '"' + (c.n === sel ? ' selected' : '') + '>' + c.rot + (c.fixa ? ' · ' + fdh(c.data).slice(0, 10) : ' · em edição') + '</option>'; }).join('') + '</select></label>' +
     '<button class="bxl" ' + h(function () { revcExcel(p, cols); }) + '>' + XL_IC + 'Exportar Excel</button>');
@@ -7050,6 +7058,8 @@ function shRevc(p) {
   if (temCro) linhas = linhas.concat([['Venda – linha de base do cronograma (R$)', function (o) { return o.cro && o.cro.V; }, 'm'], ['Custo direto – CPU (R$)', function (o) { return o.cro && o.cro.cd; }, 'm'], ['Custo indireto – permanência (R$)', function (o) { return o.cro && o.cro.ci; }, 'm'],
     ['Resultado antes de CSLL e IR (R$)', function (o) { return o.cro && o.cro.antes; }, 'm'], ['Resultado líquido (R$)', function (o) { return o.cro && o.cro.liq; }, 'm'], ['Margem líquida', margem, 'p'],
     ['Data de status', function (o) { return o.cro && o.cro.st; }, 'd'], ['Avanço previsto (LB)', function (o) { return o.cro && o.cro.pv; }, 'p'], ['Avanço real', function (o) { return o.cro && o.cro.ev; }, 'p'], ['SPI', function (o) { return o.cro && o.cro.pv ? o.cro.ev / o.cro.pv : null; }, 'n'],
+    ['Custo real acumulado – direto (R$)', function (o) { return o.real && o.real.D; }, 'm'], ['Custo real acumulado – indireto (R$)', function (o) { return o.real && o.real.I; }, 'm'], ['Custo real acumulado – total (R$)', function (o) { return o.real && o.real.total; }, 'm'], ['CPI (valor agregado ÷ custo real)', function (o) { return o.real && o.real.cpi; }, 'n'],
+    ['MO direta média no mês (real)', function (o) { return o.real && o.real.efet && o.real.efet.MOD; }, 'n'], ['MO indireta média no mês (real)', function (o) { return o.real && o.real.efet && o.real.efet.MOI; }, 'n'], ['Equipamentos médios no mês (real)', function (o) { return o.real && o.real.efet && o.real.efet.EQD + o.real.efet.EQI; }, 'n'],
     ['Término pela linha de base', function (o) { return o.cro && o.cro.lbF; }, 'd'], ['Término previsto (atual)', function (o) { return o.cro && o.cro.atF; }, 'd'], ['Prazo total (dias corridos)', prazo, 'i']]);
   var fv = function (v, t) { return v == null || isNaN(v) ? '–' : t === 'm' ? money(v) : t === 'p' ? pct(v) : t === 'd' ? fdate(v) : t === 'i' ? int(v) : nf2.format(v); };
   var fdv = function (v, t) { return v == null || isNaN(v) ? '–' : t === 'm' ? revcSinal(v) : t === 'p' ? revcSinal(v, function (x) { return nf2.format(x * 100) + ' p.p.'; }) : t === 'd' || t === 'i' ? revcSinal(v, function (x) { return int(x) + ' d'; }) : revcSinal(v, function (x) { return nf2.format(x); }); };
@@ -7109,6 +7119,173 @@ function revcExcelX(p, cols, X) {
   X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(e), 'Custo direto por EAP');
   var out = X.write(wb, { bookType: 'xlsx', type: 'array' });
   baixar('Comparativo-revisoes-' + semAcento(p.nome || 'projeto').replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '') + '.xlsx', out);
+}
+
+
+/* ================= FECHAMENTO MENSAL (REALIZADO) =================
+   Por mês: custo real (direto e indireto, por categoria e por item da EAP / centro de custo) e efetivo diário real
+   (mão de obra direta e indireta, equipamentos de produção e de apoio). O avanço físico vem da Planilha de avanço.
+   Dados em <raiz>/<id>/real/m<AAAAMM> — são do projeto, iguais em todas as revisões (como o RDO). */
+NOMES.FECH = 'Fechamento mensal (realizado)'; PRECISA_PROJ.FECH = 1; ABAS.push(['FECH', '#5a4475']);
+ICA.FECH = '<rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9h17M8 3v3M16 3v3"/><path d="M8 14.5l2.5 2.5 5-5"/>';
+(function () { GRUPOS_ABAS.forEach(function (g) { if (g[0] === 'Planejamento' && g[1].indexOf('FECH') < 0) { var i = g[1].indexOf('RDO'); g[1].splice(i >= 0 ? i + 1 : g[1].length, 0, 'FECH'); } }); })();
+var FECH_CAT = ['MO', 'EQ', 'MAT', 'SER', 'OUT'], FECH_CATN = { MO: 'Mão de obra', EQ: 'Equipamentos e veículos', MAT: 'Materiais e insumos', SER: 'Serviços', OUT: 'Outros' };
+var FECH_TIPO = { MOD: 'MO direta', MOI: 'MO indireta', EQD: 'Equip. produção', EQI: 'Equip. apoio' };
+function realRaiz(p) { return p._raiz + '/' + (p._orig || p.id) + '/real'; }
+function fechId(mi) { return 'm' + Math.floor(mi / 12) + ('0' + (mi % 12 + 1)).slice(-2); }
+function fechMiDe(id) { var m = /^m(\d{4})(\d\d)$/.exec(id); return m ? +m[1] * 12 + +m[2] - 1 : null; }
+function fechDias(mi) { return new Date(Date.UTC(Math.floor(mi / 12), mi % 12 + 1, 0)).getUTCDate(); }
+function fechCarregar(p) {
+  var q = S.projetos.filter(function (x) { return x.id === (p._orig || p.id); })[0] || p;
+  if (q._real) return Promise.resolve(q._real);
+  if (q._realP) return q._realP;
+  q._realP = db.collection(realRaiz(q)).get().then(function (r) { var M = {}; r.docs.forEach(function (d) { M[d.id] = clone(d.data()); }); q._real = M; q._realP = null; return M; }, function () { q._real = {}; q._realP = null; return q._real; });
+  return q._realP;
+}
+function fechDoc(p, mi) {
+  var q = S.projetos.filter(function (x) { return x.id === (p._orig || p.id); })[0] || p, id = fechId(mi);
+  return q._real[id] || (q._real[id] = { mi: mi, custo: [], efet: [], fechado: false });
+}
+function fechSalvar(p, mi) { var q = S.projetos.filter(function (x) { return x.id === (p._orig || p.id); })[0] || p; limpaCache(q.id); gravar(realRaiz(q) + '/' + fechId(mi), q._real[fechId(mi)]); }
+/* totais de um mês: custo real por tipo/categoria e efetivo médio por grupo */
+function fechTot(doc) {
+  var t = { D: 0, I: 0, cat: {}, efet: { MOD: 0, MOI: 0, EQD: 0, EQI: 0 }, pico: { MOD: 0, MOI: 0, EQD: 0, EQI: 0 }, dias: 0 };
+  (doc.custo || []).forEach(function (l) { var v = num(l.v); t[l.t === 'I' ? 'I' : 'D'] += v; var k = (l.t === 'I' ? 'I' : 'D') + ':' + (l.c || 'OUT'); t.cat[k] = (t.cat[k] || 0) + v; });
+  var porDia = {}; (doc.efet || []).forEach(function (r) { Object.keys(r.d || {}).forEach(function (dd) { var v = num(r.d[dd]); if (!v) return; var P = porDia[dd] || (porDia[dd] = { MOD: 0, MOI: 0, EQD: 0, EQI: 0 }); P[r.t] = (P[r.t] || 0) + v; }); });
+  var ds = Object.keys(porDia); t.dias = ds.length;
+  ds.forEach(function (dd) { Object.keys(t.efet).forEach(function (k) { t.efet[k] += porDia[dd][k] || 0; t.pico[k] = Math.max(t.pico[k], porDia[dd][k] || 0); }); });
+  if (ds.length) Object.keys(t.efet).forEach(function (k) { t.efet[k] = t.efet[k] / ds.length; });
+  t.porDia = porDia; t.total = t.D + t.I; return t;
+}
+/* acumulado do realizado até o mês (inclusive) */
+function fechAcum(p, ate) {
+  var q = S.projetos.filter(function (x) { return x.id === (p._orig || p.id); })[0] || p, M = q._real || {}, a = { D: 0, I: 0, meses: {} };
+  Object.keys(M).forEach(function (id) { var mi = fechMiDe(id); if (mi == null || (ate != null && mi > ate)) return; var t = fechTot(M[id]); a.D += t.D; a.I += t.I; a.meses[mi] = { D: t.D, I: t.I, efet: t.efet, fechado: !!M[id].fechado }; });
+  a.total = a.D + a.I; return a;
+}
+/* previsto do mês: custo (cronograma financeiro) e histograma (composições × cronograma + permanências) */
+function fechPrevisto(p, mi) {
+  var c = calc(p), o = { custo: 0, custoAc: 0, mo: { D: 0, I: 0 }, eq: { D: 0, I: 0 }, itens: {} };
+  (c.res.months || []).forEach(function (m, i) { var v = num(c.fin.total.mes[i]); if (m === mi) o.custo = v; if (m <= mi) o.custoAc += v; });
+  try {
+    var RR = relRecursos(p);
+    Object.keys(RR.ins).forEach(function (k) { var I = RR.ins[k]; if (I.t !== 'MO' && I.t !== 'EQ') return; var q = num(I.mes[mi]); if (!q) return; var ind = I.fonte !== 'CPU', g = I.t === 'MO' ? 'mo' : 'eq'; o[g][ind ? 'I' : 'D'] += q; var tk = (I.t === 'MO' ? (ind ? 'MOI' : 'MOD') : (ind ? 'EQI' : 'EQD')) + '|' + semAcento(I.d); o.itens[tk] = (o.itens[tk] || 0) + q; });
+  } catch (e) { console.error(e); }
+  return o;
+}
+function fechAvanco(p, mi) {
+  if (!p.crono || !p._cro) return null;
+  var R = croCalc(p), tot = R.tot.v || 1, ap = 0, ar = 0, at = 0;
+  R.meses.forEach(function (m) { if (m <= mi) { ap += num(R.mP[m]); ar += num(R.mR[m]); at += num(R.mT[m]); } });
+  return { pv: ap / tot, ev: ar / tot, mpv: num(R.mP[mi]) / tot, mev: num(R.mR[mi]) / tot, V: R.tot.v };
+}
+/* traz o efetivo dos RDOs emitidos no mês */
+function fechDoRdo(p, mi) {
+  var q = S.projetos.filter(function (x) { return x.id === (p._orig || p.id); })[0] || p, doc = fechDoc(p, mi), y = Math.floor(mi / 12), m = ('0' + (mi % 12 + 1)).slice(-2), n = 0;
+  var D = q._rdo && q._rdo.dias || {}, idx = {};
+  doc.efet.forEach(function (r) { idx[r.t + '|' + semAcento(r.n)] = r; });
+  Object.keys(D).forEach(function (id) {
+    if (id.indexOf('d' + y + m) !== 0 || !D[id].snap) return; var dd = id.slice(-2); n++;
+    var put = function (t, nome, v) { var k = t + '|' + semAcento(nome), r = idx[k]; if (!r) { r = idx[k] = { id: uid(), t: t, n: nome, d: {} }; doc.efet.push(r); } r.d[dd] = num(v); };
+    (D[id].snap.mo || []).forEach(function (x) { put(x[0] === 'MOI' ? 'MOI' : 'MOD', x[1], x[2]); });
+    (D[id].snap.eq || []).forEach(function (x) { put(x[0] === 'Apoio' ? 'EQI' : 'EQD', x[1], x[2]); });
+  });
+  return n;
+}
+function shFech(p) {
+  var q = S.projetos.filter(function (x) { return x.id === (p._orig || p.id); })[0] || p;
+  if (!q._real) { fechCarregar(p).then(agendar); return titulo('FECHAMENTO MENSAL (REALIZADO)') + '<div class="vazio">Carregando os lançamentos…</div>'; }
+  if (p.crono && !p._cro) { croCarregar(p); return titulo('FECHAMENTO MENSAL (REALIZADO)') + '<div class="vazio">Carregando o cronograma…</div>'; }
+  var V = S.v.fech || (S.v.fech = {}), c = calc(p), hojeMi = (function () { var d = new Date(); return d.getFullYear() * 12 + d.getMonth(); })();
+  var meses = (c.res.months || []).slice(); if (p.crono && p._cro) croCalc(p).meses.forEach(function (m) { if (meses.indexOf(m) < 0) meses.push(m); });
+  Object.keys(q._real).forEach(function (id) { var mi = fechMiDe(id); if (mi != null && meses.indexOf(mi) < 0) meses.push(mi); });
+  meses.sort(function (a, b) { return a - b; });
+  if (!meses.length) meses = [hojeMi];
+  var mi = V[q.id] != null ? V[q.id] : (meses.indexOf(hojeMi) >= 0 ? hojeMi : meses.filter(function (m) { return m <= hojeMi; }).pop() || meses[0]);
+  var doc = fechDoc(p, mi), ed = podeEditar() && !doc.fechado, adm = ehAdmin() && podeEditar(), sv = function () { fechSalvar(p, mi); agendar(); };
+  var t = fechTot(doc), ac = fechAcum(p, mi), pr = fechPrevisto(p, mi), av = fechAvanco(p, mi), X = custoResumo(p), orc = X.dir + X.ind;
+  var s = titulo('FECHAMENTO MENSAL (REALIZADO)', '<label class="revc-sel">Mês <select aria-label="Mês do fechamento" ' + h(function (el) { V[q.id] = +el.value; agendar(); }) + '>' +
+    meses.map(function (m) { var d = q._real[fechId(m)]; return '<option value="' + m + '"' + (m === mi ? ' selected' : '') + '>' + mmaa(m) + (d && d.fechado ? ' · fechado' : d && ((d.custo || []).length || (d.efet || []).length) ? ' · em aberto' : '') + '</option>'; }).join('') + '</select></label>' +
+    '<span class="chip ' + (doc.fechado ? 'ok' : '') + '">' + (doc.fechado ? 'Fechado em ' + fdh(doc.fechadoEm) : 'Em aberto') + '</span>' +
+    (podeEditar() ? (doc.fechado ? (adm ? bt('Reabrir mês', function () { doc.fechado = false; sv(); }, 'lk') : '') : bt('Fechar mês', function () { confirma('Fechar ' + mmaa(mi) + '?\n\nOs lançamentos do mês ficam travados. Depois, crie a nova revisão do projeto para congelar o planejamento deste fechamento.', function () { doc.fechado = true; doc.fechadoEm = new Date().toISOString(); doc.por = S.papel.nome || S.papel.email || ''; doc.av = av; sv(); }); }, 'lk')) : ''));
+  /* cartões */
+  var cpi = ac.total && av ? (orc * av.ev) / ac.total : null;
+  var kt = function (rot, val, sub, cls) { return '<div class="kt' + (cls ? ' ' + cls : '') + '"><span>' + rot + '</span><b>' + val + '</b>' + (sub ? '<i>' + sub + '</i>' : '') + '</div>'; };
+  s += '<div class="gk fech-k">' + (av ? kt('Avanço físico acumulado', pct(av.ev), 'previsto ' + pct(av.pv) + ' · no mês ' + pct(av.mev) + ' (prev. ' + pct(av.mpv) + ')', 'hero') : '') +
+    kt('Custo real do mês', 'R$ ' + compact(t.total), 'direto ' + compact(t.D) + ' · indireto ' + compact(t.I) + ' · previsto ' + compact(pr.custo), t.total > pr.custo && pr.custo ? 'ru' : '') +
+    kt('Custo real acumulado', 'R$ ' + compact(ac.total), 'previsto até o mês ' + compact(pr.custoAc), ac.total > pr.custoAc && pr.custoAc ? 'ru' : '') +
+    kt('CPI (desempenho de custo)', cpi == null ? '–' : nf2.format(cpi), 'valor agregado ÷ custo real dos meses lançados · acima de 1 = economia', cpi != null && cpi < 1 ? 'ru' : '') +
+    kt('Efetivo médio do mês', int(Math.round(t.efet.MOD + t.efet.MOI)) + ' pessoas', 'direta ' + nf2.format(t.efet.MOD) + ' · indireta ' + nf2.format(t.efet.MOI) + ' · previsto ' + nf2.format(pr.mo.D + pr.mo.I)) +
+    kt('Equipamentos médios', nf2.format(t.efet.EQD + t.efet.EQI), 'produção ' + nf2.format(t.efet.EQD) + ' · apoio ' + nf2.format(t.efet.EQI) + ' · previsto ' + nf2.format(pr.eq.D + pr.eq.I)) + '</div>';
+  /* custo real */
+  var eap = [], cc = idrAtivs(p).map(function (a) { return a.nome; });
+  if (p.crono && p._cro) p._cro.tasks.forEach(function (x) { if (x.l >= 1 && x.l <= 2) eap.push(x.w + ' ' + x.n); });
+  s += '<div class="gc"><h3>Custo real do mês</h3><p class="aj">Lance o que foi gasto no mês (notas, folha, medições de terceiros, aluguel de equipamentos…). Direto = obra; indireto = administração, canteiro, apoio.</p>' +
+    '<div class="tw"><table class="g fech-t"><thead><tr><th>TIPO</th><th>CATEGORIA</th><th class="l">EAP / CENTRO DE CUSTO</th><th class="l">DESCRIÇÃO / DOCUMENTO</th><th>VALOR (R$)</th>' + (ed ? '<th></th>' : '') + '</tr></thead><tbody>' +
+    (doc.custo.length ? doc.custo.map(function (l, i) {
+      return '<tr>' + cel('fc-t' + i, l.t || 'D', ed ? function (v) { l.t = v; sv(); } : null, { ops: ['D', 'I'], rotulos: { D: 'Direto', I: 'Indireto' }, c: true }) +
+        cel('fc-c' + i, l.c || 'OUT', ed ? function (v) { l.c = v; sv(); } : null, { ops: FECH_CAT, rotulos: FECH_CATN }) +
+        cel('fc-r' + i, l.r || '', ed ? function (v) { l.r = v; sv(); } : null, { ops: [''].concat(l.t === 'I' ? cc : eap), rotulos: { '': '—' } }) +
+        cel('fc-d' + i, l.d || '', ed ? function (v) { l.d = v; sv(); } : null) +
+        cel('fc-v' + i, num(l.v), ed ? function (v) { l.v = num(v); sv(); } : null, { t: 'money' }) +
+        (ed ? '<td class="c"><button class="lk" aria-label="Excluir lançamento" ' + h(function () { doc.custo.splice(i, 1); sv(); }) + '>×</button></td>' : '') + '</tr>';
+    }).join('') : '<tr><td colspan="6" class="vz c">Nenhum lançamento de custo neste mês.</td></tr>') +
+    '</tbody><tfoot><tr><td colspan="4">TOTAL DO MÊS · direto ' + money(t.D) + ' · indireto ' + money(t.I) + '</td><td class="n">' + money(t.total) + '</td>' + (ed ? '<td></td>' : '') + '</tr></tfoot></table></div>' +
+    (ed ? '<div class="row" style="gap:8px;margin-top:8px">' + bt('+ Custo direto', function () { doc.custo.push({ id: uid(), t: 'D', c: 'MO', r: '', d: '', v: 0 }); fechSalvar(p, mi); }, 'lk') + bt('+ Custo indireto', function () { doc.custo.push({ id: uid(), t: 'I', c: 'MO', r: '', d: '', v: 0 }); fechSalvar(p, mi); }, 'lk') + '</div>' : '');
+  /* resumo por categoria */
+  s += '<div class="tw" style="margin-top:12px"><table class="g fech-t"><thead><tr><th class="l">CATEGORIA</th><th>DIRETO (R$)</th><th>INDIRETO (R$)</th><th>TOTAL (R$)</th></tr></thead><tbody>' +
+    FECH_CAT.map(function (k) { var d = num(t.cat['D:' + k]), i = num(t.cat['I:' + k]); return '<tr><td>' + FECH_CATN[k] + '</td><td class="n">' + money(d) + '</td><td class="n">' + money(i) + '</td><td class="n k">' + money(d + i) + '</td></tr>'; }).join('') + '</tbody></table></div></div>';
+  /* efetivo diário */
+  var nd = fechDias(mi), dias = []; for (var d = 1; d <= nd; d++) dias.push(('0' + d).slice(-2));
+  var wd = function (dd) { return new Date(Date.UTC(Math.floor(mi / 12), mi % 12, +dd)).getUTCDay(); };
+  var grupos = ['MOD', 'MOI', 'EQD', 'EQI'];
+  var nomesMo = Object.keys(ctxDe(p).mao || {}).sort(ordAlfa), nomesEq = Object.keys(ctxDe(p).vem || {}).sort(ordAlfa);
+  s += '<div class="gc"><h3>Efetivo e equipamentos – real por dia</h3><p class="aj">Quantidade de pessoas e de equipamentos presentes em cada dia. A média do mês forma o histograma real.' + (ed ? ' Use “Trazer dos RDOs” para preencher com os RDOs emitidos.' : '') + '</p>' +
+    (ed ? '<div class="row fech-add">' + '<select aria-label="Tipo" ' + h(function (el) { V.tipoNovo = el.value; }) + '>' + grupos.map(function (g) { return '<option value="' + g + '"' + ((V.tipoNovo || 'MOD') === g ? ' selected' : '') + '>' + FECH_TIPO[g] + '</option>'; }).join('') + '</select>' +
+      '<input list="dl-fech-' + ((V.tipoNovo || 'MOD').charAt(0) === 'M' ? 'mo' : 'eq') + '" placeholder="Função ou equipamento (dos bancos de dados)" aria-label="Função ou equipamento" value="' + esc(V.nomeNovo || '') + '" data-live ' + h(function (el) { V.nomeNovo = el.value; }) + '>' +
+      bt('+ Incluir', function () { var n = String(V.nomeNovo || '').trim(); if (!n) return aviso('Digite a função ou o equipamento.'); doc.efet.push({ id: uid(), t: V.tipoNovo || 'MOD', n: n.toUpperCase(), d: {} }); V.nomeNovo = ''; fechSalvar(p, mi); }, 'lk') +
+      bt('Trazer dos RDOs', function () { if (!q._rdo) { rdoCarregar(q); return aviso('Carregando os RDOs… clique de novo em instantes.'); } var n = fechDoRdo(p, mi); fechSalvar(p, mi); aviso(n ? n + ' RDO(s) emitido(s) do mês importado(s).' : 'Nenhum RDO emitido neste mês.'); }, 'lk') +
+      bt('Copiar lista do mês anterior', function () { var ant = q._real[fechId(mi - 1)]; if (!ant || !(ant.efet || []).length) return aviso('O mês anterior não tem efetivo lançado.'); var ex = {}; doc.efet.forEach(function (r) { ex[r.t + '|' + r.n] = 1; }); ant.efet.forEach(function (r) { if (!ex[r.t + '|' + r.n]) doc.efet.push({ id: uid(), t: r.t, n: r.n, d: {} }); }); fechSalvar(p, mi); }, 'lk') +
+      '</div><datalist id="dl-fech-mo">' + nomesMo.map(function (n) { return '<option value="' + esc(n) + '">'; }).join('') + '</datalist><datalist id="dl-fech-eq">' + nomesEq.map(function (n) { return '<option value="' + esc(n) + '">'; }).join('') + '</datalist>' : '');
+  if (!doc.efet.length) s += '<div class="vazio">Nenhum efetivo lançado neste mês.</div>';
+  else {
+    s += '<div class="tw fech-tw" id="tw-fech"><table class="g fech-d"><thead><tr><th class="l fx">FUNÇÃO / EQUIPAMENTO</th><th>MÉDIA</th><th>PREV.</th>' + dias.map(function (dd) { var w = wd(dd); return '<th class="' + (w === 0 || w === 6 ? 'fds' : '') + '">' + dd + '<small>' + 'DSTQQSS'.charAt(w) + '</small></th>'; }).join('') + (ed ? '<th></th>' : '') + '</tr></thead><tbody>';
+    grupos.forEach(function (g) {
+      var L = doc.efet.filter(function (r) { return r.t === g; }).sort(function (a, b) { return ordAlfa(a.n, b.n); }); if (!L.length) return;
+      var tg = dias.map(function (dd) { return L.reduce(function (a, r) { return a + num((r.d || {})[dd]); }, 0); });
+      s += '<tr class="co"><td class="fx">' + FECH_TIPO[g] + '</td><td class="n">' + nf2.format(t.efet[g]) + '</td><td class="n">' + nf2.format(g === 'MOD' ? pr.mo.D : g === 'MOI' ? pr.mo.I : g === 'EQD' ? pr.eq.D : pr.eq.I) + '</td>' + tg.map(function (v) { return '<td class="n">' + (v ? int(v) : '') + '</td>'; }).join('') + (ed ? '<td></td>' : '') + '</tr>';
+      L.forEach(function (r) {
+        var ds = Object.keys(r.d || {}).filter(function (dd) { return num(r.d[dd]); }), med = t.dias ? ds.reduce(function (a, dd) { return a + num(r.d[dd]); }, 0) / t.dias : 0, prv = num(pr.itens[g + '|' + semAcento(r.n)]);
+        s += '<tr><td class="fx">' + esc(r.n) + '</td><td class="n">' + nf2.format(med) + '</td><td class="n vz">' + (prv ? nf2.format(prv) : '–') + '</td>' +
+          dias.map(function (dd) { return cel('fe-' + r.id + '-' + dd, num((r.d || {})[dd]) || null, ed ? function (v) { r.d = r.d || {}; if (num(v)) r.d[dd] = num(v); else delete r.d[dd]; sv(); } : null, { t: 'int', cls: wd(dd) === 0 || wd(dd) === 6 ? 'fds' : '' }); }).join('') +
+          (ed ? '<td class="c"><button class="lk" aria-label="Excluir linha" ' + h(function () { doc.efet = doc.efet.filter(function (x) { return x !== r; }); sv(); }) + '>×</button></td>' : '') + '</tr>';
+      });
+    });
+    s += '</tbody></table></div><p class="nota">Média = soma do mês ÷ dias com efetivo lançado (' + t.dias + '). Pico do mês: MO direta ' + int(t.pico.MOD) + ' · MO indireta ' + int(t.pico.MOI) + ' · equipamentos ' + int(t.pico.EQD + t.pico.EQI) + '.</p>';
+  }
+  s += '</div>';
+  /* histórico dos fechamentos */
+  var hist = Object.keys(ac.meses).map(Number).sort(function (a, b) { return a - b; });
+  if (hist.length) {
+    var acD = 0, acI = 0;
+    s += '<div class="gc"><h3>Histórico dos fechamentos</h3><div class="tw"><table class="g fech-t"><thead><tr><th>MÊS</th><th>SITUAÇÃO</th><th>DIRETO (R$)</th><th>INDIRETO (R$)</th><th>TOTAL (R$)</th><th>ACUMULADO (R$)</th><th>MO DIRETA</th><th>MO INDIRETA</th><th>EQUIPAMENTOS</th></tr></thead><tbody>' +
+      hist.map(function (m) { var x = ac.meses[m]; acD += x.D; acI += x.I; return '<tr' + (m === mi ? ' class="on"' : '') + '><td class="c">' + mmaa(m) + '</td><td class="c">' + (x.fechado ? 'Fechado' : 'Em aberto') + '</td><td class="n">' + money(x.D) + '</td><td class="n">' + money(x.I) + '</td><td class="n">' + money(x.D + x.I) + '</td><td class="n k">' + money(acD + acI) + '</td><td class="n">' + nf2.format(x.efet.MOD) + '</td><td class="n">' + nf2.format(x.efet.MOI) + '</td><td class="n">' + nf2.format(x.efet.EQD + x.efet.EQI) + '</td></tr>'; }).join('') + '</tbody></table></div></div>';
+  }
+  return s;
+}
+
+/* RDO e realizado acompanham o projeto ao liberar ou tornar rascunho; somem ao excluir */
+var SUB_PROJ = ['rdo', 'real'];
+function subMover(p, antigo) {
+  SUB_PROJ.forEach(function (sc) {
+    db.collection(antigo + '/' + p.id + '/' + sc).get().then(function (r) {
+      r.docs.forEach(function (d) { gravar(p._raiz + '/' + p.id + '/' + sc + '/' + d.id, clone(d.data())); gravar(antigo + '/' + p.id + '/' + sc + '/' + d.id, null); });
+    }, function () { });
+  });
+  p._rdo = null; p._real = null;
+}
+function subExcluir(p) {
+  SUB_PROJ.forEach(function (sc) { db.collection(p._raiz + '/' + p.id + '/' + sc).get().then(function (r) { r.docs.forEach(function (d) { gravar(p._raiz + '/' + p.id + '/' + sc + '/' + d.id, null); }); }, function () { }); });
 }
 
 })();
