@@ -1507,6 +1507,7 @@ function shGra(p) {
     }).join('') + '</div>' + (itens.length > 8 ? '<button class="gmais" ' + h(function () { S.v['rk' + chave] = !aberto; agendar(); }) + '>' + (aberto ? 'Mostrar só os 8 primeiros' : 'Mostrar os ' + itens.length + ' primeiros') + '</button>' : '') +
       '<p class="ler">' + (itens.length > 3 ? 'Os 3 primeiros somam <b>' + pct(tres / tot) + '</b> do custo total.' : 'Lista completa: ' + itens.length + ' item(ns).') + '</p></div>';
   };
+  s += graReal(p);
   s += '<div class="grid2">' + rk('a', 'Ranking de atividades', 'Quais grupos de atividade custam mais.', soma(function (r) { return r.atividade; }), 10, COR[0]) +
     rk('e', 'Ranking de equipes', 'Quais atividades (equipes) custam mais.', soma(function (r) { return r.equipe; }), 24, COR[0]) +
     rk('d', 'Ranking de detalhe', 'Quais parcelas de custo pesam mais (salários, encargos, locação, combustível…).', elem, 24, COR[0]) +
@@ -3421,11 +3422,23 @@ function shRelt(p) {
     var mz = relMatriz(cab, [T].concat(linhas), meses, fmt, { pico: true, totRot: V.r === 'MO' && V.med === 'Q' || V.r === 'EQ' && V.med === 'Q' ? 'PICO' : 'TOTAL' });
     if ((V.r === 'MO' || V.r === 'EQ') && V.med === 'Q') { [T].concat(linhas).forEach(function (l) { l.tot = Math.max.apply(null, meses.map(function (mi) { return num(l.mes[mi]); }).concat([0])); }); mz = relMatriz(cab, [T].concat(linhas), meses, fmt, { pico: true, totRot: 'PICO' }); }
     if (V.r === 'MAT' && V.med === 'H') { var ac = 0, A = { rot: 'ACUMULADO (R$)', mes: {}, cls: 'at', extra: cab.slice(1).map(function () { return ''; }), tot: false }; meses.forEach(function (mi) { ac += num(T.mes[mi]); A.mes[mi] = ac; }); mz = relMatriz(cab, [T, A].concat(linhas), meses, fmt, { pico: true }); }
+    var graRealH = '';
+    if ((V.r === 'MO' || V.r === 'EQ') && V.med === 'Q' && !V.op && realPronto(p)) {
+      var RMh = realMeses(p), temR = meses.some(function (mi) { var m = RMh[mi]; return m && (V.r === 'MO' ? m.efet.MOD + m.efet.MOI : m.efet.EQD + m.efet.EQI); });
+      if (temR) {
+        var rot1 = V.r === 'MO' ? ['REAL – MO direta (fechamento)', 'REAL – MO indireta (fechamento)'] : ['REAL – equip. produção (fechamento)', 'REAL – equip. apoio (fechamento)'], k1 = V.r === 'MO' ? ['MOD', 'MOI'] : ['EQD', 'EQI'];
+        var RTt = { rot: V.r === 'MO' ? 'REAL – efetivo médio (fechamento)' : 'REAL – equipamentos médios (fechamento)', mes: {}, cls: 'at', extra: T.extra.map(function () { return ''; }) }, R1 = { rot: rot1[0], mes: {}, extra: T.extra.map(function () { return ''; }) }, R2 = { rot: rot1[1], mes: {}, extra: T.extra.map(function () { return ''; }) };
+        meses.forEach(function (mi) { var m = RMh[mi]; if (!m) return; R1.mes[mi] = m.efet[k1[0]]; R2.mes[mi] = m.efet[k1[1]]; RTt.mes[mi] = m.efet[k1[0]] + m.efet[k1[1]]; });
+        [RTt, R1, R2].forEach(function (l) { l.tot = Math.max.apply(null, meses.map(function (mi) { return num(l.mes[mi]); }).concat([0])); });
+        mz = relMatriz(cab, [T, RTt, R1, R2].concat(linhas), meses, function (v) { return v % 1 ? nf2.format(v) : int(v); }, { pico: true, totRot: 'PICO' });
+        graRealH = '<h4 class="rel-h4">Previsto × real</h4>' + revcLinhas([{ nome: 'Previsto', cor: REVC_COR.base, dash: true, v: meses.map(function (mi) { return num(T.mes[mi]); }) }, { nome: 'Real (fechamento)', cor: REVC_COR.at, w: 3, v: meses.map(function (mi) { return RMh[mi] ? RTt.mes[mi] : null; }) }], meses.map(mmaa), { titulo: 'Previsto × real', fmt: function (v) { return nf2.format(v); } });
+      }
+    }
     aoa = mz.aoa;
     var totG = meses.reduce(function (a, mi) { return a + num(T.mes[mi]); }, 0);
     corpo = '<div class="gc"><h3>' + nomeR + ' <span class="vz" style="font-weight:500">· ' + unid + '</span></h3>' + (meses.length ? relBarras(meses, meses.map(function (mi) { return num(T.mes[mi]); }), fmt, nomeR) : '') +
       (V.r === 'DSL' ? '<p class="gq">Total no período: <b>' + (emValor ? 'R$ ' + money(totG) + '</b>' + (D.precoDiesel ? ' (' + fq(totG / D.precoDiesel) + ' L × R$ ' + money(D.precoDiesel) + '/L, tabela de combustível)' : ' (sem preço de diesel na tabela de combustível)') : fq(totG) + ' L</b>') + (!emValor && D.precoDiesel ? ' · custo estimado <b>R$ ' + money(totG * D.precoDiesel) + '</b> (R$ ' + money(D.precoDiesel) + '/L, tabela de combustível)' : '') + (semCons ? ' · <b class="pico">' + semCons + ' equipamento(s) das CPUs sem correspondente com diesel no banco Veículos e máquinas (vincule na guia CPU › Insumos, VÍNCULO = VEM)</b> — informe em CPU › Insumos da CPU, coluna DIESEL (L/h)' : '') + '</p>' : '') +
-      mz.html + '<div class="nota">Calculado das composições (CPU) relacionadas a cada atividade, distribuídas pelas datas atuais do cronograma, mais as equipes de permanência do Cronograma financeiro. ' + (V.r === 'MO' ? 'Efetivo das CPUs = horas-homem do mês ÷ ' + int(R ? R.X.hm : 220) + ' h.' : '') + '</div></div>';
+      graRealH + mz.html + '<div class="nota">' + (graRealH ? 'Linhas REAL: média mensal do efetivo diário lançado no Fechamento mensal. ' : '') + 'Calculado das composições (CPU) relacionadas a cada atividade, distribuídas pelas datas atuais do cronograma, mais as equipes de permanência do Cronograma financeiro. ' + (V.r === 'MO' ? 'Efetivo das CPUs = horas-homem do mês ÷ ' + int(R ? R.X.hm : 220) + ' h.' : '') + '</div></div>';
   } else if (V.r === 'KPC') {
     corpo = relKpiCtl(p, R, function (a) { aoa = a; });
   } else if (V.r === 'KPI') {
@@ -3437,18 +3450,39 @@ function shRelt(p) {
       if (V.r === 'FC') {
         var ent = { rot: 'ENTRADAS – receita (tendência do cronograma)', mes: {}, cls: 'at' }, lb = { rot: 'Receita prevista (linha de base)', mes: {} }, cd = { rot: '(−) Custo direto – CPU', mes: {} }, ci = { rot: '(−) Custo indireto – permanência', mes: {} }, it = { rot: '(−) Impostos + TAC', mes: {} }, sd = { rot: 'SALDO DO MÊS', mes: {}, cls: 'tt' }, sa = { rot: 'SALDO ACUMULADO', mes: {}, cls: 'at', tot: false };
         var acc = 0; meses.forEach(function (mi) { var vt = R.mT[mi] || 0, x = vt * (num(P.imp) + num(P.tac)); ent.mes[mi] = vt; lb.mes[mi] = R.mP[mi] || 0; cd.mes[mi] = -(R.mCD[mi] || 0); ci.mes[mi] = -(R.mCI[mi] || 0); it.mes[mi] = -x; sd.mes[mi] = vt - x - (R.mCD[mi] || 0) - (R.mCI[mi] || 0); acc += sd.mes[mi]; sa.mes[mi] = acc; });
-        var mz2 = relMatriz(['FLUXO'], [ent, lb, cd, ci, it, sd, sa], meses, money); aoa = mz2.aoa;
-        corpo = '<div class="gc"><h3>Fluxo de caixa (R$)</h3>' + relBarras(meses, meses.map(function (mi) { return Math.max(0, sa.mes[mi]); }), money, 'Saldo acumulado') + mz2.html + '<div class="nota">Saldo acumulado nas barras (só a parte positiva). Entradas pela tendência do cronograma; saídas pelas datas atuais (CPU) e pelo Cronograma financeiro (permanência). Medições e lançamentos realizados entram na versão Supabase.</div></div>';
+        var linFC = [ent, lb, cd, ci, it, sd, sa], notaR = '';
+        if (realPronto(p)) {
+          var RM = realMeses(p), ultR = realUltimo(p);
+          if (ultR != null) {
+            var rR = { rot: 'REALIZADO – receita pelo avanço real', mes: {}, cls: 'at' }, rD = { rot: '(−) Custo real direto (fechamento)', mes: {} }, rI = { rot: '(−) Custo real indireto (fechamento)', mes: {} }, rT = { rot: '(−) Impostos + TAC sobre a receita real', mes: {} }, rS = { rot: 'Saldo real do mês', mes: {}, cls: 'at' }, rA = { rot: 'Saldo real acumulado', mes: {}, cls: 'tt', tot: false }, accR = 0;
+            meses.forEach(function (mi) { if (mi > ultR || !RM[mi]) return; var vr = R.mR[mi] || 0, m = RM[mi], x = vr * (num(P.imp) + num(P.tac)); rR.mes[mi] = vr; rD.mes[mi] = -m.D; rI.mes[mi] = -m.I; rT.mes[mi] = -x; rS.mes[mi] = vr - x - m.D - m.I; accR += rS.mes[mi]; rA.mes[mi] = accR; });
+            linFC = linFC.concat([rR, rD, rI, rT, rS, rA]);
+            notaR = ' Realizado: só nos meses com fechamento lançado (até ' + mmaa(ultR) + '); receita pelo avanço físico real do mês (valor agregado) e custos lançados no Fechamento mensal.';
+          }
+        }
+        var SDx = supDesembolso(p);
+        if (SDx.n) {
+          var sP2 = { rot: 'Suprimentos – desembolso previsto (informativo)', mes: {}, cls: 'sp-fc' }, sR2 = { rot: 'Suprimentos – pago (informativo)', mes: {}, cls: 'sp-fc' };
+          meses.forEach(function (mi) { if (SDx.prev[mi]) sP2.mes[mi] = -SDx.prev[mi]; if (SDx.pago[mi]) sR2.mes[mi] = -SDx.pago[mi]; });
+          linFC = linFC.concat([sP2, sR2]);
+          notaR += ' Suprimentos: desembolso das compras da contratada pela data de pagamento (Mapa de suprimentos: valor e prazo de pagamento). É informativo e não entra no saldo, porque os materiais já estão no custo direto pelo consumo.';
+        }
+        var mz2 = relMatriz(['FLUXO'], linFC, meses, money); aoa = mz2.aoa;
+        corpo = '<div class="gc"><h3>Fluxo de caixa (R$)</h3>' + relBarras(meses, meses.map(function (mi) { return Math.max(0, sa.mes[mi]); }), money, 'Saldo acumulado') + mz2.html + '<div class="nota">' + esc(notaR) + ' Saldo acumulado nas barras (só a parte positiva). Entradas pela tendência do cronograma; saídas pelas datas atuais (CPU) e pelo Cronograma financeiro (permanência).</div></div>';
       } else {
         var anos = {}; meses.forEach(function (mi) { var a = Math.floor(mi / 12), o = anos[a] || (anos[a] = { v: 0, cd: 0, ci: 0 }); o.v += R.mT[mi] || 0; o.cd += R.mCD[mi] || 0; o.ci += R.mCI[mi] || 0; });
         var ks = Object.keys(anos).sort(), linhasD = [
           ['Receita bruta (venda)', Dr.V, function (o) { return o.v; }], ['(−) Impostos sobre faturamento', -Dr.imp, function (o) { return -o.v * num(P.imp); }], ['Receita líquida', Dr.rl, function (o) { return o.v * (1 - num(P.imp)); }],
           ['(−) Custos diretos – CPU', -Dr.cd, function (o) { return -o.cd; }], ['(−) Custos indiretos – permanência', -Dr.ci, function (o) { return -o.ci; }], ['Margem bruta', Dr.rl - Dr.cd - Dr.ci, function (o) { return o.v * (1 - num(P.imp)) - o.cd - o.ci; }],
           ['(−) TAC – administração central', -Dr.tac, function (o) { return -o.v * num(P.tac); }], ['Resultado operacional (antes de CSLL e IR)', Dr.antes, null], ['(−) CSLL', -Dr.csll, null], ['(−) IR', -Dr.ir, null], ['RESULTADO LÍQUIDO', Dr.liq, null]];
-        aoa = [['DEMONSTRATIVO', 'TOTAL (R$)', '% VENDA'].concat(ks)];
-        corpo = '<div class="gc"><h3>Demonstrativo econômico</h3><div class="tw"><table class="g"><thead><tr><th class="l">DEMONSTRATIVO</th><th>TOTAL (R$)</th><th>% VENDA</th>' + ks.map(function (a) { return '<th>' + a + '</th>'; }).join('') + '</tr></thead><tbody>' +
-          linhasD.map(function (l, i) { aoa.push([l[0], l[1], Dr.V ? l[1] / Dr.V : 0].concat(ks.map(function (a) { return l[2] ? l[2](anos[a]) : ''; }))); return '<tr class="' + ([2, 5, 7].indexOf(i) >= 0 ? 'at' : i === 10 ? 'tt' : '') + '"><td>' + l[0] + '</td><td class="n">' + money(l[1]) + '</td><td class="n">' + (Dr.V ? pct(l[1] / Dr.V) : '') + '</td>' + ks.map(function (a) { return '<td class="n">' + (l[2] ? money(l[2](anos[a])) : '') + '</td>'; }).join('') + '</tr>'; }).join('') +
-          '</tbody></table></div><div class="nota">Base de CSLL e IR: ' + (P.base === 'PRESUMIDO' ? 'lucro presumido' : 'lucro real') + '. Impostos ' + pct(P.imp) + ', TAC ' + pct(P.tac) + ', CSLL ' + pct(P.csll) + ', IR ' + pct(P.ir) + ' (Cronograma físico › Venda × custo × resultado).</div></div>';
+        var DR = null;
+        if (realPronto(p)) { var ultD = realUltimo(p); if (ultD != null) { var RMd = realMeses(p), vR = 0, cdR = 0, ciR = 0; Object.keys(RMd).forEach(function (k) { if (+k <= ultD) { vR += R.mR[+k] || 0; cdR += RMd[k].D; ciR += RMd[k].I; } });
+          var impR = vR * num(P.imp), tacR = vR * num(P.tac), antR = vR - impR - cdR - ciR - tacR, csR = (P.base === 'PRESUMIDO' ? vR * num(P.presCsll) : Math.max(0, antR)) * num(P.csll), irR = (P.base === 'PRESUMIDO' ? vR * num(P.presIr) : Math.max(0, antR)) * num(P.ir);
+          DR = { ate: ultD, v: [vR, -impR, vR - impR, -cdR, -ciR, vR - impR - cdR - ciR, -tacR, antR, -csR, -irR, antR - csR - irR] }; } }
+        aoa = [['DEMONSTRATIVO', 'TOTAL (R$)', '% VENDA'].concat(DR ? ['REALIZADO ATÉ ' + mmaa(DR.ate), '% RECEITA REAL'] : [], ks)];
+        corpo = '<div class="gc"><h3>Demonstrativo econômico</h3><div class="tw"><table class="g"><thead><tr><th class="l">DEMONSTRATIVO</th><th>TOTAL (R$)</th><th>% VENDA</th>' + (DR ? '<th class="dre-r">REALIZADO ATÉ ' + mmaa(DR.ate).toUpperCase() + '</th><th class="dre-r">% RECEITA REAL</th>' : '') + ks.map(function (a) { return '<th>' + a + '</th>'; }).join('') + '</tr></thead><tbody>' +
+          linhasD.map(function (l, i) { aoa.push([l[0], l[1], Dr.V ? l[1] / Dr.V : 0].concat(DR ? [DR.v[i], DR.v[0] ? DR.v[i] / DR.v[0] : 0] : [], ks.map(function (a) { return l[2] ? l[2](anos[a]) : ''; }))); return '<tr class="' + ([2, 5, 7].indexOf(i) >= 0 ? 'at' : i === 10 ? 'tt' : '') + '"><td>' + l[0] + '</td><td class="n">' + money(l[1]) + '</td><td class="n">' + (Dr.V ? pct(l[1] / Dr.V) : '') + '</td>' + (DR ? '<td class="n dre-r">' + money(DR.v[i]) + '</td><td class="n dre-r">' + (DR.v[0] ? pct(DR.v[i] / DR.v[0]) : '') + '</td>' : '') + ks.map(function (a) { return '<td class="n">' + (l[2] ? money(l[2](anos[a])) : '') + '</td>'; }).join('') + '</tr>'; }).join('') +
+          '</tbody></table></div><div class="nota">Base de CSLL e IR: ' + (P.base === 'PRESUMIDO' ? 'lucro presumido' : 'lucro real') + '. Impostos ' + pct(P.imp) + ', TAC ' + pct(P.tac) + ', CSLL ' + pct(P.csll) + ', IR ' + pct(P.ir) + ' (Cronograma físico › Venda × custo × resultado).' + (DR ? ' Realizado: meses com fechamento lançado até ' + mmaa(DR.ate) + ' — receita pelo avanço físico real do mês (valor agregado) e custos do Fechamento mensal, com as mesmas alíquotas.' : '') + '</div></div>';
       }
     }
   } else {
@@ -4552,6 +4586,9 @@ function mapaSvg(M, off) {
   M.fs.forEach(function (f) {
     if (off[f.c]) return;
     var s = M.st[f.s] || {}, cp = MAPA_PAD[f.c % MAPA_PAD.length], tt = '<title>' + esc((f.n ? f.n + ' · ' : '') + M.cam[f.c]) + '</title>';
+    var avc = V._av && f.n && f.t !== 'P' ? V._av[f.n] : null;
+    if (avc) { var corA = MAPA_AVC[mapaSt(avc.pc)]; s = Object.assign({}, s, { f: corA, fa: 1, nf: 0, no: 0, l: corA, la: 1, w: Math.max(2, s.w || 0) }); tt = '<title>' + esc(f.n + ' · área ' + avc.a + ' · avanço ' + pct(avc.pc / 100)) + '</title>'; }
+    else if (V._av && f.t === 'A') { s = Object.assign({}, s, { fa: 0.15 }); }
     if (f.t === 'A') {
       var d = f.k.map(function (r) { return pts(r) + 'Z'; }).join('');
       out += '<path d="' + d + '" fill="' + (s.nf ? 'none' : (s.f || cp)) + '" fill-opacity="' + (s.nf ? 0 : Math.min(0.55, s.fa == null ? 0.25 : s.fa * 0.55)) + '" stroke="' + (s.no ? 'none' : (s.l || cp)) + '" stroke-opacity="' + (s.la == null ? 1 : Math.max(0.35, s.la)) + '" stroke-width="' + Math.max(1, Math.min(4, s.w || 1.5)) + '" vector-effect="non-scaling-stroke" fill-rule="evenodd">' + tt + '</path>';
@@ -4586,7 +4623,7 @@ function shMapa(p) {
   var P = mapaProj(M), lx = (P.x(M.bb[2]) - P.x(M.bb[0])) / 1000, ly = (P.y(M.bb[1]) - P.y(M.bb[3])) / 1000;
   var fnd = M.img && M.img.src ? '<h4>Fundo</h4><label class="mp-cam"><input type="checkbox"' + (V.semFundo ? '' : ' checked') + ' ' + h(function () { V.semFundo = !V.semFundo; agendar(); }) + '><i style="background:linear-gradient(135deg,#6b7f4a,#a08a5c)"></i><span>Imagem de satélite</span><em></em></label>' +
     (V.semFundo ? '' : '<label class="mp-op"><span>Opacidade</span><input type="range" min="20" max="100" step="5" value="' + Math.round((V.opF == null ? 1 : V.opF) * 100) + '" aria-label="Opacidade da imagem de satélite" ' + h(function (el) { V.opF = (+el.value) / 100; agendar(); }) + '></label>') + '<div style="height:10px"></div>' : '';
-  var side = '<aside class="mp-side">' + osmPainel(p, tipo, M, ed) + fnd + '<h4>Camadas</h4><div class="mp-cams">' + M.cam.map(function (c, i) {
+  var side = '<aside class="mp-side">' + mapaAvPainel(p, tipo, M, ed) + osmPainel(p, tipo, M, ed) + fnd + '<h4>Camadas</h4><div class="mp-cams">' + M.cam.map(function (c, i) {
     return '<label class="mp-cam"><input type="checkbox"' + (V.off[i] ? '' : ' checked') + ' ' + h(function () { V.off[i] = !V.off[i]; agendar(); }) + '><i style="background:' + (corC[i] || MAPA_PAD[i % MAPA_PAD.length]) + '"></i><span>' + esc(c) + '</span><em>' + int(cont[i] || 0) + '</em></label>';
   }).join('') + '</div>' +
     '<h4>Arquivo</h4><dl class="mp-inf"><dt>Nome</dt><dd>' + esc(M.nome) + '</dd><dt>Arquivo</dt><dd>' + esc(inf.arq) + '</dd><dt>Inserido em</dt><dd>' + esc(String(inf.dt || '').split('-').reverse().join('/')) + '</dd><dt>Elementos</dt><dd>' + int(M.fs.length) + '</dd><dt>Extensão</dt><dd>' + nf2.format(lx) + ' × ' + nf2.format(ly) + ' km</dd><dt>Centro</dt><dd>' + nf6((M.bb[1] + M.bb[3]) / 2) + ', ' + nf6((M.bb[0] + M.bb[2]) / 2) + '</dd></dl>' +
@@ -6514,7 +6551,10 @@ function dlgSupIt(d) {
     dIn('dtPed', 'Pedido emitido em', o.dtPed) + tIn('qPed', 'Quantidade pedida', o.qPed, '', 1) + dIn('dtPrev', 'Data prevista de entrega (fornecedor)', o.dtPrev) +
     (I.lotes.length ? '' : tIn('qRec', 'Quantidade recebida', o.qRec, '', 1)) + dIn('dtRec', 'Data efetiva de recebimento', o.dtRec) + dIn('dtLib', 'Liberado para utilização em', o.dtLib) +
     (I.resp === 'Contratante' || I.resp === 'Compartilhado' ? dIn('conf', 'Contratante confirmou disponibilidade em', o.conf) : '') +
-    '<label class="sp-w2">Observações' + (ed ? '<input type="text" value="' + esc(o.obs || '') + '" ' + h(function (el) { supSet(p, I, 'obs', 'Observações', el.value.trim() || null); }) + '>' : '<b>' + esc(o.obs || '–') + '</b>') + '</label></div>';
+    '<label class="sp-w2">Observações' + (ed ? '<input type="text" value="' + esc(o.obs || '') + '" ' + h(function (el) { supSet(p, I, 'obs', 'Observações', el.value.trim() || null); }) + '>' : '<b>' + esc(o.obs || '–') + '</b>') + '</label></div>' +
+    (I.resp === 'Contratante' ? '' : '<h4 class="sp-h4">Valor e pagamento <span class="vz" style="font-weight:500">· vai para o Fluxo de caixa</span></h4><div class="sp-fm">' +
+      tIn('valor', 'Valor da compra (R$)', o.valor, 'valor do pedido', 1) + tIn('pgDias', 'Pagamento: dias após a entrega', o.pgDias, '30 (0 = na entrega; negativo = antecipado)', 1) +
+      dIn('dtPag', 'Pago em', o.dtPag) + tIn('vPag', 'Valor pago (R$)', o.vPag, 'se diferente do valor da compra', 1) + '</div>');
   s += '<h4 class="sp-h4">Planejamento</h4><div class="sp-fm">' +
     ((I.orig === 'CRO' || I.orig === 'SUG' || I.orig === 'MAN' || I.q == null) ? tIn('q', 'Quantidade total (' + esc(I.u || 'un.') + ')', o.q, 'pendente – informe', 1) : '') +
     ((I.orig === 'CRO' || I.orig === 'SUG') ? tIn('u', 'Unidade', o.u, I.u || 'un.') : '') +
@@ -6832,7 +6872,7 @@ var MANUAL = {
   CONFIG: { r: 'Cadastro do projeto: tipo de obra, identificação, contrato, contratante, local, prazos, calendário, clima, reajustes e BDI. É daqui que sai o cronograma padrão.',
     d: ['O primeiro item é o tipo do projeto (subestação, eólico, parque solar, estrada, edificação, ETE…). Ele define o modelo de cronograma padrão e os dados técnicos pedidos (ex.: MWp e estruturas no solar; frentes, km e aerogeradores no eólico).', 'Os quadros Contratante e Local alimentam o RDO, os relatórios e o Sobre. Responsáveis, prazo e valor guardam datas e valor do contrato; BDI contratual calcula o BDI pela fórmula escolhida.', 'Calendário (jornada, feriados, paralisações) e clima definem os dias úteis usados em todo o planejamento.', 'Gerar cronograma padrão monta a EAP OP Consulting com marcos, engenharia, suprimentos, construção, comissionamento e encerramento a partir dos dados técnicos; a lista "falta preencher" mostra o que ainda impede a geração.'],
     f: ['Escolher o tipo do projeto', 'Preencher identificação, contrato e local', 'Informar dados técnicos do tipo', 'Conferir calendário e BDI', 'Gerar cronograma padrão'] },
-  GRA: { r: 'Painel de gráficos: visão rápida do projeto com curva S (previsto × realizado), resumo econômico, custos por grupo e clima.',
+  GRA: { r: 'Painel de gráficos: visão rápida do projeto com custo previsto × realizado acumulado e CPI, curva S, resumo econômico e rankings de custo.',
     d: ['Os números vêm do cronograma, do avanço lançado e do custo calculado; não há digitação nesta guia.', 'Use para reuniões de acompanhamento e para conferir rapidamente se o projeto está adiantado ou atrasado.'],
     f: ['Cronograma e avanço atualizados', 'Painel recalcula sozinho', 'Ler curva S e desvios', 'Detalhar nos relatórios'] },
   INP: { r: 'Planilha de avanço: lançamento diário das quantidades executadas em cada atividade do cronograma.',
@@ -6845,7 +6885,7 @@ var MANUAL = {
     d: ['Importar MS Project lê arquivos XML (o .mpp pode ser salvo como XML no MS Project). As tarefas são reorganizadas na EAP padrão OP Consulting.', 'Avanço real = % físico concluído ponderado pelo custo da linha de base; previsto = linha de base no calendário do projeto.', 'Cada macroatividade recebe composições (CPU) com quantidades, que distribuem o custo direto no tempo.', 'Exportar gera XML do MS Project com linha de base, % físico, vínculos e calendários.'],
     f: ['Gerar padrão ou importar XML', 'Conferir EAP e vínculos', 'Relacionar CPUs (Relacionamento)', 'Congelar linha de base (revisão)', 'Atualizar avanço e replanejar'] },
   SUP: { r: 'Mapa de suprimentos: lista o que precisa ser comprado ou fornecido, quando é necessário e quando precisa ser pedido, a partir do cronograma.',
-    d: ['A data de necessidade vem da primeira atividade que consome o item; a data limite de pedido desconta o prazo (lead time) da categoria e a folga.', 'Responsabilidade (contratada ou contratante), fornecedor, status, datas e quantidades informadas ficam registrados com histórico.', 'Painel com alertas (atrasado, crítico, alta), tabela, linha do tempo (Gantt) e exportação Excel e PDF.'],
+    d: ['A data de necessidade vem da primeira atividade que consome o item; a data limite de pedido desconta o prazo (lead time) da categoria e a folga.', 'Responsabilidade (contratada ou contratante), fornecedor, status, datas e quantidades informadas ficam registrados com histórico.', 'Valor da compra, prazo de pagamento (dias após a entrega), data e valor pago alimentam o Fluxo de caixa (itens da contratada).', 'Painel com alertas (atrasado, crítico, alta), tabela, linha do tempo (Gantt) e exportação Excel e PDF.'],
     f: ['Cronograma com atividades e fornecimentos', 'Mapa calcula necessidade e data de pedido', 'Definir prazos e responsáveis', 'Atualizar status das compras', 'Tratar alertas'] },
   QDS: { r: 'Quadro de saldos: matriz atividades × áreas (subcampos, subparques, frentes) mostrando o que está concluído, em andamento ou não iniciado.',
     d: ['Usa o cronograma e o avanço lançado; filtre por grupo da EAP e escolha o tipo de área.', 'Os totais mostram o percentual de frentes em cada situação. Exporta para Excel.'],
@@ -6891,14 +6931,15 @@ var MANUAL = {
     d: ['Atividade geral = tarefas de mesmo nome em vários locais (subcampos, parques…). Cada uma tem observações e indicadores ▲ ■ ▼.'], f: ['Avanço lançado', 'Escolher atividade geral', 'Ler tendência e previsão', 'Registrar observações'] },
   LOB: { r: 'Linhas de balanço: ritmo de execução por local para cada grupo da EAP, com linha de base, cronograma atual e executado.',
     d: ['Tabela de ritmos (linha de base, atual, real) e previsão de término pelo ritmo real.'], f: ['Escolher grupo e locais', 'Comparar ritmos', 'Ajustar equipes'] },
-  MAP: { r: 'Mapas: desenho do empreendimento (KMZ/KML) sobre o mapa do OpenStreetMap, por camadas.',
-    d: ['Envie o KMZ do projeto; camadas e elementos podem ser ligados e desligados. Fundo © colaboradores do OpenStreetMap.'], f: ['Enviar KMZ/KML', 'Conferir camadas', 'Usar em reuniões e relatórios'] },
-  HISP: { r: 'Histogramas: mão de obra, equipamentos, diesel e consumo de materiais ao longo do tempo.',
-    d: ['Calculados pelas composições × cronograma mais as permanências. Mão de obra e equipamentos arredondados para o inteiro acima.'], f: ['Escolher histograma e período', 'Agrupar por função ou atividade', 'Exportar'] },
+  MAP: { r: 'Mapas: desenho do empreendimento (KMZ/KML) sobre o mapa do OpenStreetMap, colorido pelo avanço de cada área do cronograma.',
+    d: ['Envie o KMZ do projeto; camadas e elementos podem ser ligados e desligados. Fundo © colaboradores do OpenStreetMap.', '“Colorir pelo avanço” pinta cada elemento ligado a uma área (Sub-Campo ou Sub-Parque do cronograma): verde concluído, amarelo em andamento, laranja não iniciado. O filtro de grupo da EAP mostra o avanço de uma frente de serviço (ex.: só cravação).', 'A ligação é automática quando o nome do elemento no KMZ é o nome da área (ex.: “SPGA.01.01”). Os demais são ligados à mão em “Ligar elementos às áreas”.'],
+    f: ['Enviar KMZ/KML', 'Conferir ligação dos elementos às áreas', 'Ligar o colorido pelo avanço', 'Filtrar por grupo da EAP', 'Usar em reuniões'] },
+  HISP: { r: 'Histogramas: mão de obra, equipamentos, diesel e consumo de materiais ao longo do tempo, com o real dos fechamentos.',
+    d: ['Calculados pelas composições × cronograma mais as permanências. Mão de obra e equipamentos arredondados para o inteiro acima.', 'Em mão de obra e equipamentos (quantidade, todas as atividades) aparecem as linhas REAL — média mensal do efetivo lançado no Fechamento mensal — e o gráfico previsto × real.'], f: ['Escolher histograma e período', 'Agrupar por função ou atividade', 'Exportar'] },
   CMB: { r: 'Diesel e combustíveis: consumo em litros e em reais por mês, por veículo, categoria, combustível ou atividade.',
     d: ['Usa o consumo L/h do banco Veículos e máquinas e as horas previstas.'], f: ['Escolher período e combustível', 'Agrupar', 'Exportar Excel'] },
-  R_FC: { r: 'Fluxo de caixa: entradas (venda) e saídas (custo) por mês e acumulado.', d: ['Exporta para Excel.'], f: ['Custo e venda calculados', 'Ler saldo mensal e acumulado'] },
-  R_DRE: { r: 'Demonstrativo econômico: venda, impostos, custo direto, indireto, CSLL e IR, total e por ano.', d: ['Impostos e regime (lucro real ou presumido) vêm dos parâmetros do cronograma.'], f: ['Parâmetros definidos', 'Ler resultado por ano', 'Exportar'] },
+  R_FC: { r: 'Fluxo de caixa: entradas (venda) e saídas (custo) por mês e acumulado, previsto e realizado, com o desembolso das compras de suprimentos.', d: ['Previsto: receita pela tendência do cronograma, custo direto (CPU) e indireto (permanência), impostos e TAC.', 'Realizado: nos meses com fechamento lançado, receita pelo avanço físico real e custos reais do Fechamento mensal, com saldo real acumulado.', 'Suprimentos: desembolso previsto e pago das compras da contratada (valor e prazo de pagamento no Mapa de suprimentos); informativo, não entra no saldo.', 'Exporta para Excel.'], f: ['Custo e venda calculados', 'Fechamentos e compras lançados', 'Ler saldo previsto e real'] },
+  R_DRE: { r: 'Demonstrativo econômico: venda, impostos, custo direto, indireto, CSLL e IR, total, por ano e realizado até o último fechamento.', d: ['Impostos e regime (lucro real ou presumido) vêm dos parâmetros do cronograma.', 'A coluna Realizado usa os meses com fechamento lançado: receita pelo avanço real e custos reais.'], f: ['Parâmetros definidos', 'Ler resultado por ano', 'Exportar'] },
   RELS: { r: 'SESMT: EPI, exames (PCMSO), grupos GHE e dimensionamento do SESMT a partir do efetivo previsto.', d: ['Usa o histograma de mão de obra do projeto.'], f: ['Efetivo previsto', 'Gerar relatórios de SST'] },
   SIS: { r: 'Configurações: preferências (tema, tamanho da letra, idioma), formatos de data, hora e moeda e parâmetros gerais (empresa, encargos).', d: ['Tema e letra valem para o navegador; formatos e parâmetros valem para todos. Parâmetros gerais só administradores alteram.'], f: ['Ajustar preferências', 'Definir parâmetros da empresa'] },
   DADOS: { r: 'Dados e verificação: recarrega bancos e projetos do servidor, recalcula o projeto aberto e mostra a lista de erros.', d: ['Use quando outra pessoa alterou dados ou para conferir inconsistências antes de emitir relatórios.'], f: ['Atualizar base de dados', 'Atualizar projeto', 'Corrigir a lista de erros'] },
@@ -6959,7 +7000,7 @@ function revInd(p) {
     }
     try {
       var stMi = o.cro ? miDe(o.cro.st) : null, A = fechAcum(p, stMi), ult = Object.keys(A.meses).map(Number).sort(function (x, y) { return x - y; }).pop();
-      if (A.total || ult != null) o.real = { D: A.D, I: A.I, total: A.total, cpi: A.total && o.cro ? (o.custo - o.risco) * o.cro.ev / A.total : null, mi: ult, efet: ult != null ? A.meses[ult].efet : null, mes: (function () { var m = {}; Object.keys(A.meses).forEach(function (k) { m[k] = A.meses[k].D + A.meses[k].I; }); return m; })() };
+      if (A.total || ult != null) o.real = { D: A.D, I: A.I, total: A.total, cpi: A.total && o.cro ? realEV(p, stMi) / A.total : null, mi: ult, efet: ult != null ? A.meses[ult].efet : null, mes: (function () { var m = {}; Object.keys(A.meses).forEach(function (k) { m[k] = A.meses[k].D + A.meses[k].I; }); return m; })() };
     } catch (e) { console.error(e); }
     return o;
   });
@@ -7209,12 +7250,12 @@ function shFech(p) {
     '<span class="chip ' + (doc.fechado ? 'ok' : '') + '">' + (doc.fechado ? 'Fechado em ' + fdh(doc.fechadoEm) : 'Em aberto') + '</span>' +
     (podeEditar() ? (doc.fechado ? (adm ? bt('Reabrir mês', function () { doc.fechado = false; sv(); }, 'lk') : '') : bt('Fechar mês', function () { confirma('Fechar ' + mmaa(mi) + '?\n\nOs lançamentos do mês ficam travados. Depois, crie a nova revisão do projeto para congelar o planejamento deste fechamento.', function () { doc.fechado = true; doc.fechadoEm = new Date().toISOString(); doc.por = S.papel.nome || S.papel.email || ''; doc.av = av; sv(); }); }, 'lk')) : ''));
   /* cartões */
-  var cpi = ac.total && av ? (orc * av.ev) / ac.total : null;
+  var evR = realEV(p, mi), cpi = ac.total && evR != null ? evR / ac.total : null;
   var kt = function (rot, val, sub, cls) { return '<div class="kt' + (cls ? ' ' + cls : '') + '"><span>' + rot + '</span><b>' + val + '</b>' + (sub ? '<i>' + sub + '</i>' : '') + '</div>'; };
   s += '<div class="gk fech-k">' + (av ? kt('Avanço físico acumulado', pct(av.ev), 'previsto ' + pct(av.pv) + ' · no mês ' + pct(av.mev) + ' (prev. ' + pct(av.mpv) + ')', 'hero') : '') +
     kt('Custo real do mês', 'R$ ' + compact(t.total), 'direto ' + compact(t.D) + ' · indireto ' + compact(t.I) + ' · previsto ' + compact(pr.custo), t.total > pr.custo && pr.custo ? 'ru' : '') +
     kt('Custo real acumulado', 'R$ ' + compact(ac.total), 'previsto até o mês ' + compact(pr.custoAc), ac.total > pr.custoAc && pr.custoAc ? 'ru' : '') +
-    kt('CPI (desempenho de custo)', cpi == null ? '–' : nf2.format(cpi), 'valor agregado ÷ custo real dos meses lançados · acima de 1 = economia', cpi != null && cpi < 1 ? 'ru' : '') +
+    kt('CPI (desempenho de custo)', cpi == null ? '–' : nf2.format(cpi), 'valor agregado ÷ custo real, nos meses lançados · acima de 1 = economia', cpi != null && cpi < 1 ? 'ru' : '') +
     kt('Efetivo médio do mês', int(Math.round(t.efet.MOD + t.efet.MOI)) + ' pessoas', 'direta ' + nf2.format(t.efet.MOD) + ' · indireta ' + nf2.format(t.efet.MOI) + ' · previsto ' + nf2.format(pr.mo.D + pr.mo.I)) +
     kt('Equipamentos médios', nf2.format(t.efet.EQD + t.efet.EQI), 'produção ' + nf2.format(t.efet.EQD) + ' · apoio ' + nf2.format(t.efet.EQI) + ' · previsto ' + nf2.format(pr.eq.D + pr.eq.I)) + '</div>';
   /* custo real */
@@ -7286,6 +7327,104 @@ function subMover(p, antigo) {
 }
 function subExcluir(p) {
   SUB_PROJ.forEach(function (sc) { db.collection(p._raiz + '/' + p.id + '/' + sc).get().then(function (r) { r.docs.forEach(function (d) { gravar(p._raiz + '/' + p.id + '/' + sc + '/' + d.id, null); }); }, function () { }); });
+}
+
+
+/* ================= REALIZADO NOS GRÁFICOS E RELATÓRIOS ================= */
+/* valor agregado (orçamento × avanço físico real) só dos meses com fechamento lançado, para o CPI comparar períodos iguais */
+function realEV(p, ate) {
+  if (!p.crono || !p._cro) return null;
+  var R = croCalc(p), X = custoResumo(p), orc = X.dir + X.ind, M = fechAcum(p, ate).meses, f = 0;
+  Object.keys(M).forEach(function (k) { if (M[k].D || M[k].I) f += num(R.mR[+k]) / (R.tot.v || 1); });
+  return orc * f;
+}
+function realPronto(p) { var q = S.projetos.filter(function (x) { return x.id === (p._orig || p.id); })[0] || p; if (!q._real && db) { fechCarregar(p).then(agendar); return false; } return true; }
+function realMeses(p) { var A = fechAcum(p, null); return A.meses; }
+function realUltimo(p) { var ks = Object.keys(realMeses(p)).map(Number).filter(function (k) { var m = realMeses(p)[k]; return m.D || m.I || m.efet.MOD || m.efet.MOI || m.efet.EQD || m.efet.EQI; }).sort(function (a, b) { return a - b; }); return ks.length ? ks[ks.length - 1] : null; }
+/* bloco do Painel: custo previsto × real acumulado */
+function graReal(p) {
+  if (!realPronto(p)) return '';
+  var c = calc(p), M = realMeses(p), ult = realUltimo(p), X = custoResumo(p);
+  if (ult == null) return '<div class="gc gra-real"><h3>Custo previsto × realizado</h3><p class="gq">Ainda não há realizado lançado. Lance o custo real e o efetivo em <b>Planejamento › Fechamento mensal (realizado)</b> para comparar com o previsto aqui.</p></div>';
+  var ms = (c.res.months || []).slice(); Object.keys(M).forEach(function (k) { k = +k; if (ms.indexOf(k) < 0) ms.push(k); }); ms.sort(function (a, b) { return a - b; });
+  var prevMes = {}; (c.res.months || []).forEach(function (mi, i) { prevMes[mi] = num(c.fin.total.mes[i]); });
+  var ap = 0, ar = 0, sP = [], sR = [], prevAte = 0, realAte = 0;
+  ms.forEach(function (mi) { ap += num(prevMes[mi]); sP.push(ap); if (mi <= ult) { ar += M[mi] ? M[mi].D + M[mi].I : 0; sR.push(ar); } else sR.push(null); if (mi <= ult) { prevAte = ap; realAte = ar; } });
+  var av = p.crono && p._cro ? fechAvanco(p, ult) : null, ev = realEV(p, ult), cpi = ev != null && realAte ? ev / realAte : null;
+  var k = function (rot, v, sub, cls) { return '<div class="kt' + (cls ? ' ' + cls : '') + '"><span>' + rot + '</span><b>' + v + '</b>' + (sub ? '<i>' + sub + '</i>' : '') + '</div>'; };
+  return '<div class="gc gra-real"><h3>Custo previsto × realizado <span class="vz" style="font-weight:500">· até ' + mmaa(ult) + '</span></h3>' +
+    '<div class="gk fech-k">' + k('Previsto acumulado', 'R$ ' + compact(prevAte), 'cronograma financeiro') + k('Realizado acumulado', 'R$ ' + compact(realAte), 'fechamentos lançados', realAte > prevAte ? 'ru' : '') +
+    k('Diferença', revcSinal(realAte - prevAte, function (v) { return 'R$ ' + compact(v); }), prevAte ? pct((realAte - prevAte) / prevAte) + ' do previsto' : '', realAte > prevAte ? 'ru' : '') +
+    (ev != null ? k('Valor agregado', 'R$ ' + compact(ev), 'orçamento × avanço real dos meses lançados') + k('CPI', cpi == null ? '–' : nf2.format(cpi), 'acima de 1 = custo abaixo do agregado', cpi != null && cpi < 1 ? 'ru' : '') : '') + '</div>' +
+    revcLinhas([{ nome: 'Previsto acumulado', cor: REVC_COR.base, dash: true, v: sP }, { nome: 'Realizado acumulado', cor: REVC_COR.at, w: 3, v: sR }], ms.map(mmaa), { titulo: 'Custo acumulado previsto e realizado' }) +
+    '<p class="gq">O realizado considera só os meses lançados no Fechamento mensal; o CPI compara o valor agregado e o custo real desses mesmos meses.</p></div>';
+}
+
+
+/* desembolso das compras de suprimentos (responsabilidade da contratada) por mês: previsto pela data de entrega + prazo de pagamento; pago pela data informada */
+function supDesembolso(p) {
+  var out = { prev: {}, pago: {}, n: 0, tot: 0, totPago: 0 };
+  if (!p.sup || !p.sup.it) return out;
+  var M; try { M = supCalc(p); } catch (e) { return out; }
+  var D = supDados(p).it, dia = function (x) { return x ? E.day(x) : null; };
+  (M.itens || []).forEach(function (I) {
+    var o = D[I.k] || {}, v = num(o.valor); if (!v || I.resp === 'Contratante') return;
+    out.n++; out.tot += v;
+    if (o.dtPag) { var vp = o.vPag != null && o.vPag !== '' ? num(o.vPag) : v, mp = miDe(dia(o.dtPag)); out.pago[mp] = (out.pago[mp] || 0) + vp; out.totPago += vp; return; }
+    var base = dia(o.dtRec) || dia(o.dtPrev) || I.dtPrev || I.lRec || I.nec; if (base == null) return;
+    var pg = o.pgDias == null || o.pgDias === '' ? 30 : num(o.pgDias), mi = miDe(base + pg); out.prev[mi] = (out.prev[mi] || 0) + v;
+  });
+  return out;
+}
+
+
+/* ---------- mapa colorido pelo avanço ----------
+   Cada elemento do KMZ é ligado a uma área do cronograma (Sub-Campo ou Sub-Parque) pelo nome; o que não casar
+   automaticamente pode ser ligado à mão (p.mapas[tipo].vinc). A cor segue o Quadro de saldos. */
+var MAPA_AVC = { ok: '#2e9e5b', an: '#e0b000', ni: '#e8762c' };
+function mapaSt(pc) { return pc >= 99.95 ? 'ok' : pc > 0.0001 ? 'an' : 'ni'; }
+function mapaNorm(x) { return semAcento(x || '').replace(/[^A-Z0-9]+/g, ' ').trim().replace(/\b0+(\d)/g, '$1').replace(/\s+/g, ''); }
+function mapaNum(x) { var m = semAcento(x || '').match(/\d+/g); return m ? m.map(function (n) { return +n; }).join('-') : null; }
+function mapaLimpa(a) { return String(a || '').replace(/^\s*\d+\s*[.)-]\s*/, ''); }
+function mapaAreas(p, nv, g) {
+  var R = croCalc(p), A = {};
+  var dentro = function (t) { if (!g) return true; var x = t; while (x) { if (x.u === g) return true; x = R.by[x.p]; } return false; };
+  R.leaves.forEach(function (t) {
+    var k = nv === 'SP' ? t.sp : t.sc; if (!k || !dentro(t)) return;
+    var o = A[k] || (A[k] = { bc: 0, sb: 0, n: 0, sp: 0 }), b = num(t.bc), r = realDe(t); o.bc += b; o.sb += b * r; o.n++; o.sp += r;
+  });
+  var out = {}; Object.keys(A).forEach(function (k) { var o = A[k]; out[k] = o.bc ? o.sb / o.bc : o.sp / o.n; });
+  return out;
+}
+function mapaVincular(M, areas, man) {
+  var ix = {}, num1 = {}, dup = {}; Object.keys(areas).forEach(function (a) { ix[mapaNorm(a)] = a; ix[mapaNorm(mapaLimpa(a))] = a; var n = mapaNum(mapaLimpa(a)); if (n) { if (num1[n]) dup[n] = 1; num1[n] = a; } });
+  var V = {}, nomes = {}, ok = 0, tot = 0;
+  M.fs.forEach(function (f) { if (f.t === 'P' || !f.n || nomes[f.n]) return; nomes[f.n] = 1; tot++;
+    var a = man && man[f.n] !== undefined ? man[f.n] : ix[mapaNorm(f.n)] || (function () { var n = mapaNum(f.n); return n && !dup[n] ? num1[n] : null; })();
+    if (a && areas[a] != null) { V[f.n] = { a: a, pc: areas[a] }; ok++; } });
+  return { V: V, ok: ok, tot: tot, nomes: Object.keys(nomes) };
+}
+function mapaAvPainel(p, tipo, M, ed) {
+  var V = S.v.mapa; V._av = null;
+  if (!p.crono) return '';
+  if (!p._cro) { croCarregar(p); return '<h4>Avanço da obra</h4><p class="mp-av-n">Carregando o cronograma…</p>'; }
+  var nv = V.nv || 'SC', inf = (p.mapas || {})[tipo] || {}, man = (inf.vinc || {})[nv] || {}, areas = mapaAreas(p, nv, V.g ? +V.g : 0), nA = Object.keys(areas).length;
+  var L = mapaVincular(M, areas, man);
+  if (V.av) V._av = L.V;
+  var R = croCalc(p), grupos = []; Object.keys(R.porMacro).forEach(function (u) { var g = R.by[u]; while (R.by[g.p] && R.by[g.p].l >= 2) g = R.by[g.p]; if (grupos.indexOf(g) < 0) grupos.push(g); }); grupos.sort(function (a, b) { return cpuOrd(a.w, b.w); });
+  var cont = { ok: 0, an: 0, ni: 0 }; Object.keys(L.V).forEach(function (k) { cont[mapaSt(L.V[k].pc)]++; });
+  var s = '<h4>Avanço da obra</h4><label class="mp-cam"><input type="checkbox"' + (V.av ? ' checked' : '') + ' ' + h(function () { V.av = !V.av; agendar(); }) + '><i style="background:linear-gradient(90deg,' + MAPA_AVC.ok + ',' + MAPA_AVC.an + ',' + MAPA_AVC.ni + ')"></i><span>Colorir pelo avanço</span><em></em></label>' +
+    '<div class="mp-av-f"><select aria-label="Áreas" ' + h(function (el) { V.nv = el.value; agendar(); }) + '><option value="SC"' + (nv === 'SC' ? ' selected' : '') + '>Áreas: Sub-Campos</option><option value="SP"' + (nv === 'SP' ? ' selected' : '') + '>Áreas: Sub-Parques</option></select>' +
+    '<select aria-label="Grupo da EAP" ' + h(function (el) { V.g = el.value; agendar(); }) + '><option value="">Todas as atividades</option>' + grupos.map(function (g) { return '<option value="' + g.u + '"' + (String(g.u) === String(V.g || '') ? ' selected' : '') + '>' + esc(g.w + ' ' + g.n) + '</option>'; }).join('') + '</select></div>' +
+    (nA ? '<p class="mp-av-n">' + int(L.ok) + ' de ' + int(L.tot) + ' elementos ligados a ' + int(nA) + ' áreas do cronograma.' + (V.av ? '<br><span class="mp-av-l"><i style="background:' + MAPA_AVC.ok + '"></i>Concluído ' + cont.ok + '</span><span class="mp-av-l"><i style="background:' + MAPA_AVC.an + '"></i>Em andamento ' + cont.an + '</span><span class="mp-av-l"><i style="background:' + MAPA_AVC.ni + '"></i>Não iniciado ' + cont.ni + '</span>' : '') + '</p>'
+      : '<p class="mp-av-n">As tarefas do cronograma não têm ' + (nv === 'SP' ? 'Sub-Parque' : 'Sub-Campo') + '. O mapa usa esses campos do MS Project para saber a área de cada tarefa.</p>');
+  if (nA && ed) {
+    var areaN = {}; M.fs.forEach(function (f) { if (f.t !== 'P' && f.n && !/^(POLYLINE|POLYGON|PATH|LINE|CAMINHO|LINHA|POLIGONO)\b|^\s*\[/i.test(semAcento(f.n))) areaN[f.n] = 1; });
+    var sem = L.nomes.filter(function (n) { return !L.V[n] && areaN[n]; }).sort(cpuOrd), lig = L.nomes.filter(function (n) { return L.V[n]; }).sort(cpuOrd), ops = [''].concat(Object.keys(areas).sort(cpuOrd));
+    var linha = function (n) { return '<div class="mp-vc"><span title="' + esc(n) + '">' + esc(n) + '</span><select aria-label="Área de ' + esc(n) + '" ' + h(function (el) { var I = p.mapas[tipo], vv = I.vinc || (I.vinc = {}), m2 = vv[nv] || (vv[nv] = {}); if (el.value === '__auto') delete m2[n]; else m2[n] = el.value || null; salvarMeta(p); agendar(); }) + '><option value="__auto">automático</option>' + ops.map(function (a) { return '<option value="' + esc(a) + '"' + (man[n] !== undefined && (man[n] || '') === a ? ' selected' : '') + '>' + (a ? esc(a) : '— não é área —') + '</option>'; }).join('') + '</select></div>'; };
+    s += '<details class="mp-vd"' + (V.vincAb ? ' open' : '') + '><summary ' + h(function () { V.vincAb = !V.vincAb; }) + '>Ligar elementos às áreas (' + sem.length + ' sem área)</summary><p class="mp-av-n">A ligação automática compara o nome do elemento com o nome da área (ex.: “SPGA.01.01”). Para os demais, escolha a área.</p>' + sem.concat(lig).slice(0, 400).map(linha).join('') + '</details>';
+  }
+  return s;
 }
 
 })();
