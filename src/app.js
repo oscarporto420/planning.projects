@@ -1215,6 +1215,10 @@ function novoProjeto(copia) {
 }
 function baixar(nome, dados) {
   if (!dl) return msgbox('AVISO!', 'O download não está disponível nesta visualização.');
+  if (dados && dados.__xlsx) {
+    var wbS = dados.__xlsx;
+    return xlLayout(wbS, nome).then(function (buf) { baixar(nome, buf); }, function (e) { console.error(e); var X = window.XLSX; if (X) baixar(nome, X.write(wbS, { bookType: 'xlsx', type: 'array' })); });
+  }
   dl.save({ filename: nome, data: dados }).catch(function (e) { if (e && e.code !== 'declined') msgbox('ERRO!', 'Não foi possível gerar o arquivo (' + ((e && e.code) || 'erro') + ').', 'crit'); });
 }
 function exportarBtn() {
@@ -4876,11 +4880,13 @@ function tabelaFin(p) {
   var cab = ['ITEM', 'DESCRICAO', 'UNI.', 'QUANTIDADE', 'TOTAL EQUIPES', 'LOCAL / FRENTE', 'CENTRO DE CUSTO', 'INICIO', 'TERMINO', 'MESES / DIAS', 'DIAS NORMAIS', 'DIAS UTEIS'].concat(CV.map(function (C) { return C.nome; }), ['TOTAL', 'PERCEN.', 'MENSAL', 'DIARIO', 'VALOR UNITARIO MENSAL POR EQUIPE', 'VALOR TOTAL POR UNIDADE', 'HH', 'HM'], months.map(mmaa));
   return [cab].concat(c.fin.linhas.map(function (l) { return [l.item, l.nome, l.uni || '', l.qtd || 0, l.equipes || 0, l.trecho || '', l.cc || '', fdate(l.ini), fdate(l.fim), l.prazo, l.dias, l.uteis].concat(pcV(l.pc), [l.total, l.pct, l.mensal, l.diario, l.porEquipe || 0, l.porUnidade || 0, l.hh, l.hm], l.mes); }));
 }
+/* a gravação (write) devolve um pedido; baixar() aplica o leiaute do sistema antes de salvar o arquivo */
+function xlPorta(X) { if (X.__porta) return X.__porta; var P = Object.create(X); P.write = function (wb, o) { if (o && o.bookType && o.bookType !== 'xlsx') return X.write(wb, o); return { __xlsx: wb }; }; P.writeFile = function (wb, nome) { baixar(nome, { __xlsx: wb }); }; X.__porta = P; return P; }
 function carregaXlsx() {
   return new Promise(function (ok, erro) {
-    if (window.XLSX) return ok(window.XLSX);
+    if (window.XLSX) return ok(xlPorta(window.XLSX));
     var sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-    sc.onload = function () { window.XLSX ? ok(window.XLSX) : erro(new Error('biblioteca indisponível')); }; sc.onerror = function () { erro(new Error('não foi possível carregar o gerador de Excel')); };
+    sc.onload = function () { window.XLSX ? ok(xlPorta(window.XLSX)) : erro(new Error('biblioteca indisponível')); }; sc.onerror = function () { erro(new Error('não foi possível carregar o gerador de Excel')); };
     document.head.appendChild(sc);
   });
 }
@@ -4906,7 +4912,7 @@ function dlgExp(d) {
 }
 
 /* ================= início ================= */
-window.__custo = { S: S, render: render, ccGerar: ccGerar, calc: calc, croCalc: croCalc, croCarregar: croCarregar, custoResumo: custoResumo, salvarMeta: salvarMeta, GRUPOS_ABAS: GRUPOS_ABAS, NOMES: NOMES, nivelAba: nivelAba, nivelProj: nivelProj, podeEditar: podeEditar, podeGravar: podeGravar, proj: proj, zipUm: zipUm, croXml: croXml, relRecursos: relRecursos, idrEfetivo: idrEfetivo, cpuDados: cpuDados, cpuCalc: cpuCalc, croRecriarCpus: croRecriarCpus, croCarregar: croCarregar, croGerarFin: croGerarFin, croDeFin: croDeFin, croCompletarLb: croCompletarLb, croDistribuir: croDistribuir, croRemoverChaves: croRemoverChaves, croRecriarCpus2: null, salvarBase: salvarBase, salvarMeta: salvarMeta, apagarAtiv: apagarAtiv, cpuChaves: cpuChaves, croCalc: croCalc, croResultado: croResultado, calc: calc, novoProjeto: novoProjeto, proj: proj, cfgFalta: cfgFalta, croGerarPadrao: croGerarPadrao, croLerXml: croLerXml, croGravarTudo: croGravarTudo, croParam: croParam, supCalc: supCalc };
+window.__custo = { S: S, render: render, supExcel: supExcel, ccGerar: ccGerar, calc: calc, croCalc: croCalc, croCarregar: croCarregar, custoResumo: custoResumo, salvarMeta: salvarMeta, GRUPOS_ABAS: GRUPOS_ABAS, NOMES: NOMES, nivelAba: nivelAba, nivelProj: nivelProj, podeEditar: podeEditar, podeGravar: podeGravar, proj: proj, zipUm: zipUm, croXml: croXml, relRecursos: relRecursos, idrEfetivo: idrEfetivo, cpuDados: cpuDados, cpuCalc: cpuCalc, croRecriarCpus: croRecriarCpus, croCarregar: croCarregar, croGerarFin: croGerarFin, croDeFin: croDeFin, croCompletarLb: croCompletarLb, croDistribuir: croDistribuir, croRemoverChaves: croRemoverChaves, croRecriarCpus2: null, salvarBase: salvarBase, salvarMeta: salvarMeta, apagarAtiv: apagarAtiv, cpuChaves: cpuChaves, croCalc: croCalc, croResultado: croResultado, calc: calc, novoProjeto: novoProjeto, proj: proj, cfgFalta: cfgFalta, croGerarPadrao: croGerarPadrao, croLerXml: croLerXml, croGravarTudo: croGravarTudo, croParam: croParam, supCalc: supCalc };
 temaAplica(); render();
 carregar().then(function () {
   /* projetos antigos: passam a ter a própria lista de grupos de atividade */
@@ -7484,6 +7490,104 @@ function cfgCcs(p, svp) {
     : '<p class="aj">O projeto usa a lista geral de Configurações › Centros de custo (' + (S.base.tabelas.centrosCusto || []).length + ' centros). Gere a lista própria para separar os centros deste projeto.</p>';
   return cfgCard('Centros de custo do projeto', (L.length ? L.length + ' centros · ' + L.filter(function (c) { return c.t !== 'I'; }).length + ' diretos e ' + L.filter(function (c) { return c.t === 'I'; }).length + ' indiretos' : 'Sem lista própria') + ' · modelo: ' + modelo + ' · código ' + ccSigla(p) + '.G.SEQ',
     corpo + (ed ? '<div class="row" style="gap:8px;margin-top:8px">' + bt(L.length ? 'Incluir os que faltam do modelo' : 'Gerar pelo tipo de obra', function () { gerar(false); }, 'lk') + (L.length ? bt('Refazer pelo modelo', function () { confirma('Substituir a lista de centros de custo do projeto pelo modelo de ' + modelo + '?\n\nCentros incluídos à mão serão perdidos.', function () { gerar(true); }); }, 'lk') : '') + '</div>' : ''));
+}
+
+
+/* ================= EXCEL COM O LEIAUTE DO SISTEMA =================
+   Toda planilha gerada pelas telas (tabelas montadas em linhas) passa por aqui antes do download: vira um arquivo
+   com cabeçalho da marca (logos do executor, da contratante e da obra; título; projeto; data e usuário), tabela com
+   cabeçalho azul, linhas zebradas, bordas, formatos numéricos, totais destacados, painéis congelados, filtro,
+   configuração de impressão e marca-d'água OP Consulting. */
+var XL_COR = { azul: 'FF1769E8', azulEsc: 'FF0F3F8C', tinta: 'FF1F2A3A', cinza: 'FF7B8799', zebra: 'FFF5F8FC', borda: 'FFDDE3EC', total: 'FFE7F0FD' };
+var OP_LOGO_PNG = null;
+function opLogoPng() {
+  if (OP_LOGO_PNG) return Promise.resolve(OP_LOGO_PNG);
+  return new Promise(function (res) { var im = new Image(); im.onload = function () { try { var c = document.createElement('canvas'); c.width = 720; c.height = 192; c.getContext('2d').drawImage(im, 0, 0, 720, 192); OP_LOGO_PNG = c.toDataURL('image/png'); } catch (e) { OP_LOGO_PNG = null; } res(OP_LOGO_PNG); }; im.onerror = function () { res(null); }; im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(WM_SVG.replace('opacity="0.11"', 'opacity="1"').replace('viewBox="0 0 300 96"', 'viewBox="0 0 360 96" width="720" height="192"')); });
+}
+function xlLogo(url) {
+  if (!url || !/^data:image\/(png|jpe?g)/.test(url)) return Promise.resolve(null);
+  return new Promise(function (ok) { var im = new Image(); im.onload = function () { ok({ base64: url, extension: /jpe?g/.test(url.slice(5, 16)) ? 'jpeg' : 'png', w: im.naturalWidth || 200, h: im.naturalHeight || 80 }); }; im.onerror = function () { ok(null); }; im.src = url; });
+}
+function xlTituloDe(nomeArq, aba) {
+  var t = String(aba || '').trim(); if (t && !/^(sheet|planilha|plan)\d*$/i.test(t)) return t.toUpperCase();
+  return String(nomeArq || 'Relatório').replace(/\.xlsx$/i, '').replace(/[-_]+/g, ' ').toUpperCase();
+}
+function xlLayout(wbS, nomeArq) {
+  return Promise.all([carregaExcelJS(), carregaXlsx()]).then(function (L) {
+    var XJ = L[0], XS = L[1], p = proj(), em = S.base.empresa || {}, cli = p && p.clienteId && typeof cliDe === 'function' ? cliDe(p.clienteId) : null;
+    return (em.logo ? Promise.resolve(em.logo) : opLogoPng()).then(function (logoEx) { return Promise.all([xlLogo(logoEx), xlLogo(cli && cli.logo), xlLogo(p && p.logo)]); }).then(function (logos) {
+      var wb = new XJ.Workbook(); wb.creator = 'Planning Projects · OP Consulting'; wb.created = new Date();
+      var B = { style: 'thin', color: { argb: XL_COR.borda } }, bordas = { top: B, left: B, bottom: B, right: B };
+      var ids = logos.map(function (lg) { try { return lg ? wb.addImage({ base64: lg.base64, extension: lg.extension }) : null; } catch (e) { return null; } });
+      var quem = S.papel && (S.papel.nome || S.papel.email) || '', agora = new Date();
+      wbS.SheetNames.forEach(function (nomeAba) {
+        var wsS = wbS.Sheets[nomeAba], ref = wsS && wsS['!ref']; if (!ref) return;
+        var R = XS.utils.decode_range(ref), nC = R.e.c - R.s.c + 1;
+        /* linhas de título que a tela já põe antes da tabela: viram notas acima dela (sem repetir marca e data) */
+        var cheias = function (r) { var n = 0; for (var c = R.s.c; c <= R.e.c; c++) { var x = wsS[XS.utils.encode_cell({ r: r, c: c })]; if (x && x.v !== '' && x.v != null) n++; } return n; };
+        var notas = [], r0 = R.s.r;
+        while (r0 < R.e.r && cheias(r0) < Math.min(2, nC)) { var t0 = wsS[XS.utils.encode_cell({ r: r0, c: R.s.c })]; var tx = t0 && t0.v != null ? String(t0.v).trim() : ''; if (tx && !/OP CONSULTING|PLANNING PROJECTS|^GERADO EM|^EXPORTADO EM/i.test(tx)) notas.push(tx); r0++; }
+        R = { s: { r: r0, c: R.s.c }, e: R.e }; var nR = R.e.r - R.s.r + 1;
+        var ws = wb.addWorksheet(String(nomeAba).slice(0, 31));
+        var H0 = 6 + notas.length; /* linha do cabeçalho da tabela */
+        notas.forEach(function (tx, i) { var cn = ws.getCell(6 + i, 1); cn.value = tx; cn.font = { size: 10, italic: true, color: { argb: XL_COR.cinza } }; });
+        if (notas.length) H0++;
+        /* ---- faixa da marca ---- */
+        var ncTit = Math.max(nC, 6);
+        ws.getRow(1).height = 22; ws.getRow(2).height = 20; ws.getRow(3).height = 16; ws.getRow(4).height = 16; ws.getRow(5).height = 8;
+        var tit = ws.getCell(2, 3); tit.value = xlTituloDe(nomeArq, nomeAba); tit.font = { name: 'Calibri', size: 15, bold: true, color: { argb: XL_COR.tinta } };
+        var sub = ws.getCell(3, 3); sub.value = (p ? p.nome + (p.tipo ? ' · ' + tipoNome(p) : '') : 'Planning Projects') + (cli ? ' · Contratante: ' + (cli.fantasia || cli.razao || cli.nome || '') : '') + (p && p.rev ? ' · Rev. ' + revAtual(p) : '');
+        sub.font = { size: 10, color: { argb: XL_COR.tinta } };
+        var info = ws.getCell(4, 3); info.value = 'Emitido em ' + fdate(E.day(agora.toISOString().slice(0, 10))) + ' ' + ('0' + agora.getHours()).slice(-2) + ':' + ('0' + agora.getMinutes()).slice(-2) + (quem ? ' · por ' + quem : '') + ' · ' + (em.fantasia || em.razao || 'OP Consulting') + ' · Planning Projects';
+        info.font = { size: 9, color: { argb: XL_COR.cinza } };
+        for (var c0 = 1; c0 <= ncTit; c0++) { var cb = ws.getCell(5, c0); cb.border = { top: { style: 'medium', color: { argb: XL_COR.azul } } }; }
+        var pos = function (id, lg, col, dir) {
+          if (id == null || !lg) return; var hMax = 58, wMax = 170, k = Math.min(hMax / lg.h, wMax / lg.w);
+          ws.addImage(id, { tl: { col: dir ? Math.max(col - 1.6, 2) : col, row: 0.15 }, ext: { width: Math.round(lg.w * k), height: Math.round(lg.h * k) }, editAs: 'oneCell' });
+        };
+        pos(ids[0], logos[0], 0.1, false);
+        if (ids[1] != null) pos(ids[1], logos[1], ncTit, true);
+        if (ids[2] != null) pos(ids[2], logos[2], ids[1] != null ? Math.max(ncTit - 2.2, 3) : ncTit, true);
+        /* ---- tabela ---- */
+        var cab = [], larg = [];
+        for (var c = 0; c < nC; c++) { var hc = wsS[XS.utils.encode_cell({ r: R.s.r, c: R.s.c + c })]; cab.push(hc ? String(hc.v == null ? '' : hc.v) : ''); larg.push(Math.min(60, Math.max(8, cab[c].length * 0.95 + 2))); }
+        var pctCol = cab.map(function (t) { return /%|PERCENT|AVAN[CÇ]O|MARGEM|BDI/i.test(t); });
+        for (var r = 0; r < nR; r++) {
+          var row = ws.getRow(H0 + r), primeira = '', ehTot = false;
+          for (var cc = 0; cc < nC; cc++) {
+            var sc = wsS[XS.utils.encode_cell({ r: R.s.r + r, c: R.s.c + cc })], cell = row.getCell(cc + 1);
+            if (sc) {
+              if (sc.f) cell.value = { formula: sc.f, result: sc.v };
+              else if (sc.t === 'd' || sc.v instanceof Date) cell.value = sc.v instanceof Date ? sc.v : new Date(sc.v);
+              else cell.value = sc.v == null ? null : sc.v;
+              if (cc === 0) primeira = String(sc.v == null ? '' : sc.v);
+              var tam = String(sc.w != null ? sc.w : sc.v == null ? '' : sc.v).length;
+              if (r > 0) larg[cc] = Math.min(60, Math.max(larg[cc], tam * 0.95 + 2));
+              if (r > 0 && typeof sc.v === 'number') cell.numFmt = sc.z && sc.z !== 'General' ? sc.z : pctCol[cc] && Math.abs(sc.v) <= 5 ? '0.00%' : Number.isInteger(sc.v) && Math.abs(sc.v) < 1e6 && !/R\$|VALOR|CUSTO|VENDA|PRE[CÇ]O|TOTAL|SALDO/i.test(cab[cc]) ? '#,##0' : '#,##0.00';
+              if (r > 0 && cell.value instanceof Date) cell.numFmt = 'dd/mm/yyyy';
+            }
+            cell.border = bordas;
+            if (r === 0) { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL_COR.azul } }; cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 }; cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; }
+            else { cell.font = { size: 10, color: { argb: XL_COR.tinta } }; cell.alignment = { vertical: 'middle', horizontal: typeof (sc && sc.v) === 'number' ? 'right' : 'left', wrapText: false }; }
+          }
+          if (r === 0) { row.height = 30; continue; }
+          ehTot = /^\s*(\(=\)|TOTAL|SUBTOTAL|SALDO|RESULTADO|PICO|PRE[CÇ]O TOTAL|LUCRO|MARGEM)/i.test(primeira);
+          for (var c2 = 1; c2 <= nC; c2++) {
+            var ce = row.getCell(c2);
+            if (ehTot) { ce.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL_COR.total } }; ce.font = { size: 10, bold: true, color: { argb: XL_COR.azulEsc } }; }
+            else if (r % 2 === 0) ce.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL_COR.zebra } };
+          }
+        }
+        (wsS['!merges'] || []).forEach(function (m) { try { ws.mergeCells(H0 + m.s.r - R.s.r, m.s.c - R.s.c + 1, H0 + m.e.r - R.s.r, m.e.c - R.s.c + 1); } catch (e) { } });
+        larg.forEach(function (w, i) { ws.getColumn(i + 1).width = Math.round(w); });
+        if (larg[0] < 18) ws.getColumn(1).width = 18;
+        ws.views = [{ state: 'frozen', xSplit: 1, ySplit: H0, showGridLines: false }];
+        if (nR > 1) ws.autoFilter = { from: { row: H0, column: 1 }, to: { row: H0 + nR - 1, column: nC } };
+        ws.pageSetup = { orientation: nC > 6 ? 'landscape' : 'portrait', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: H0 + ':' + H0, margins: { left: 0.4, right: 0.4, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 } };
+      });
+      return xlMarca(wb).then(function () { return wb.xlsx.writeBuffer(); });
+    });
+  });
 }
 
 })();
