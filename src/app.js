@@ -343,10 +343,11 @@ function idiAplica() {
   }
 }
 function idiGrava(l) { try { localStorage.setItem(IDI_K, l); } catch (e) { S.idiMem = l; } if (l === 'pt') { IDI.l = null; idiPrep(); render(); } else { IDI.l = null; idiAplica(); render(); } }
-function shSis() {
+function shSis() { return shTabelas(proj(), 'sis'); }
+function shSisPref() {
   var t = temaLer(), op = function (k, rot, sub, a, b, c) { return '<label class="' + (t === k ? 'on' : '') + '"><input type="radio" name="tema"' + (t === k ? ' checked' : '') + ' ' + h(function () { temaGrava(k); }) + '><span class="tema-pv" style="background:' + a + '"><i style="background:' + b + '"></i><i style="background:linear-gradient(' + a + ' 30%,' + c + ' 30% 60%,' + a + ' 60%)"></i></span><b>' + rot + '</b><small class="vz">' + sub + '</small></label>'; };
   var semP = !proj();
-  return '<div class="a1">CONFIGURAÇÕES</div><div class="a2"><span>PREFERÊNCIAS DO SISTEMA</span></div>' +
+  return '' +
     cfgCard('Tema', 'Aparência de todo o sistema neste navegador.', '<div class="tema-op" role="radiogroup" aria-label="Tema">' + op('claro', 'Claro', 'fundo claro', '#edf0f5', '#ffffff', '#1769e8') + op('escuro', 'Escuro', 'fundo escuro', '#0f141c', '#19212c', '#4d8dff') + op('auto', 'Automático', 'segue o sistema do computador', 'linear-gradient(90deg,#edf0f5 50%,#0f141c 50%)', '#7b8799', '#4d8dff') + Object.keys(PALETAS).map(function (k) { var x = PALETAS[k]; return op(k, x[0], 'tom suave', x[1], '#ffffff', x[2]); }).join('') + '</div>') +
     cfgCard('Tamanho da letra', 'Aumenta ou diminui textos, tabelas e botões de todo o sistema neste navegador.', '<div class="tema-op fonte-op" role="radiogroup" aria-label="Tamanho da letra">' + [['p', 'Menor', 13], ['n', 'Normal', 16], ['g', 'Maior', 19]].map(function (x) { var f = fonteLer(); return '<label class="' + (f === x[0] ? 'on' : '') + '"><input type="radio" name="fonte"' + (f === x[0] ? ' checked' : '') + ' ' + h(function () { fonteGrava(x[0]); }) + '><span class="fonte-pv" style="font-size:' + x[2] + 'px">Aa</span><b>' + x[1] + '</b></label>'; }).join('') + '</div>') +
     cfgCard('Formatos e moeda', 'Valem para todos os usuários e projetos. A moeda troca o símbolo exibido nos valores (não converte câmbio); o preço dos bancos de dados continua o cadastrado.', (function () {
@@ -1534,7 +1535,8 @@ function eolMw(p) { var e = p.eol || {}; return (e.frentes || []).reduce(functio
 function portePorTipo(p) { return num(p.porte) || (tipoCat(p.tipo) === 'UFV' ? num(p.mwp) : tipoCat(p.tipo) === 'SE' ? num(p.tensao) : tipoCat(p.tipo) === 'EOL' ? eolMw(p) : 0); }
 /* projetos antigos: tipo pela lista nova, porte pelos campos de potência/tensão */
 function tipoMigrar(p) { var x = tipoInfo(p.tipo), mud = false; if (x && p.tipo !== x[0]) { p.tipo = x[0]; mud = true; } if (x && p.porte == null && portePorTipo(p)) { p.porte = portePorTipo(p); mud = true; } if (x && !p.categoria) { p.categoria = tipoCat(p.tipo); mud = true; } return mud; }
-function cfgSecoes() { return CFG_SECOES.filter(function (g) { return g[0] !== 's' || ehAdmin(); }); }
+/* Dados do projeto mostra os grupos 'p' e 'g'; Sistema › Configurações mostra as preferências e os cadastros do sistema ('s') */
+function cfgSecoes(modo) { if (modo === 'sis') return [['x', 'Preferências', [['pref', 'Preferências do sistema']]]].concat(CFG_SECOES.filter(function (g) { return g[0] === 's' && ehAdmin(); })); return CFG_SECOES.filter(function (g) { return g[0] !== 's'; }); }
 /* seletor em botões (um item por vez) */
 function cfgChips(itens, atual, escolher, novo) {
   return '<div class="chips">' + itens.map(function (x) { var k = Array.isArray(x) ? x[0] : x, r = Array.isArray(x) ? x[1] : x; return '<button class="' + (k === atual ? 'on' : '') + '" ' + h(function () { escolher(k); agendar(); }) + '>' + esc(r) + '</button>'; }).join('') + (novo && podeEditar() ? '<button class="mais" ' + h(function () { novo(); agendar(); }) + '>+ Novo</button>' : '') + '</div>';
@@ -1560,15 +1562,16 @@ function cfgCampo(id, rot, valor, set, o) {
 }
 function cfgCard(tit, ajuda, corpo) { return '<div class="cs"><h3>' + tit + '</h3>' + (ajuda ? '<p class="aj">' + ajuda + '</p>' : '<div style="height:8px"></div>') + corpo + '</div>'; }
 function cfgTab(html) { return '<div class="tw2">' + html + '</div>'; }
-function shTabelas(p) {
-  var t = S.base.tabelas, v = t.val, sv = function () { salvarBase('tabelas'); }, svp = function () { salvarMeta(p); }, sec = S.v.cfg || 'proj', ed = podeEditar();
+function shTabelas(p, modo) {
+  var sis = modo === 'sis', t = S.base.tabelas, v = t.val, sv = function () { salvarBase('tabelas'); }, svp = function () { salvarMeta(p); }, sec = sis ? (S.v.sisCfg || 'pref') : (S.v.cfg || 'proj'), ed = podeEditar();
   var ehProj = sec === 'proj' || sec === 'cal' || sec === 'clima' || sec === 'reaj', rotulo = '';
-  cfgSecoes().forEach(function (g) { g[2].forEach(function (x) { if (x[0] === sec) rotulo = x[1]; }); });
-  if (!rotulo) { sec = S.v.cfg = 'proj'; rotulo = 'Dados do projeto'; ehProj = true; }
-  var s = '<div class="a1">DADOS DO PROJETO</div><div class="a2"><span>PARÂMETROS E CADASTROS DO SISTEMA</span></div><div class="cfg"><nav class="cfg-n" aria-label="Assuntos">' + cfgSecoes().map(function (g) {
-    return '<h5>' + g[1] + '</h5>' + g[2].map(function (x) { return '<button class="' + (sec === x[0] ? 'on' : '') + '" ' + h(function () { S.v.cfg = x[0]; $('#main').scrollTop = 0; agendar(); }) + '>' + x[1] + '</button>'; }).join('');
-  }).join('') + '</nav><div class="cfg-c"><h2>' + rotulo + (ehProj ? '<span class="esc">' + (p ? 'Vale para o projeto: ' + esc(p.nome) : 'Por projeto') + '</span>' : '<span class="esc g">Vale para todos os projetos</span>') + '</h2>';
+  cfgSecoes(modo).forEach(function (g) { g[2].forEach(function (x) { if (x[0] === sec) rotulo = x[1]; }); });
+  if (!rotulo) { if (sis) { sec = S.v.sisCfg = 'pref'; rotulo = 'Preferências do sistema'; } else { sec = S.v.cfg = 'proj'; rotulo = 'Dados do projeto'; ehProj = true; } }
+  var s = '<div class="a1">' + (sis ? 'CONFIGURAÇÕES' : 'DADOS DO PROJETO') + '</div><div class="a2"><span>' + (sis ? 'PREFERÊNCIAS E CADASTROS DO SISTEMA' : 'PARÂMETROS DO PROJETO E DA EMPRESA') + '</span></div><div class="cfg"><nav class="cfg-n" aria-label="Assuntos">' + cfgSecoes(modo).map(function (g) {
+    return '<h5>' + g[1] + '</h5>' + g[2].map(function (x) { return '<button class="' + (sec === x[0] ? 'on' : '') + '" ' + h(function () { if (sis) S.v.sisCfg = x[0]; else S.v.cfg = x[0]; $('#main').scrollTop = 0; agendar(); }) + '>' + x[1] + '</button>'; }).join('');
+  }).join('') + '</nav><div class="cfg-c"><h2>' + rotulo + (sec === 'pref' ? '<span class="esc">Tema e letra valem para este navegador</span>' : ehProj ? '<span class="esc">' + (p ? 'Vale para o projeto: ' + esc(p.nome) : 'Por projeto') + '</span>' : '<span class="esc g">Vale para todos os projetos</span>') + '</h2>';
   var fim = '</div></div>';
+  if (sec === 'pref') return s + shSisPref() + fim;
   if (ehProj && !p) return s + '<p class="dsc">Estas configurações pertencem a um projeto.</p>' + cfgCard('Nenhum projeto selecionado', 'Escolha um projeto na lista do canto superior esquerdo' + (ed ? ' ou crie um com o botão Novo' : '') + '. As configurações "De todos os projetos" podem ser consultadas sem projeto aberto.', '') + fim;
   if (ehProj) { p.grupos = gruposDe(p) === p.grupos ? p.grupos : S.base.tabelas.atividades.slice(); p.subestacoes = p.subestacoes || []; p.reajuste = p.reajuste || {}; p.feriadosMun = p.feriadosMun || []; p.paralisacoes = p.paralisacoes || []; }
 
@@ -6941,7 +6944,7 @@ var MANUAL = {
   R_FC: { r: 'Fluxo de caixa: entradas (venda) e saídas (custo) por mês e acumulado, previsto e realizado, com o desembolso das compras de suprimentos.', d: ['Previsto: receita pela tendência do cronograma, custo direto (CPU) e indireto (permanência), impostos e TAC.', 'Realizado: nos meses com fechamento lançado, receita pelo avanço físico real e custos reais do Fechamento mensal, com saldo real acumulado.', 'Suprimentos: desembolso previsto e pago das compras da contratada (valor e prazo de pagamento no Mapa de suprimentos); informativo, não entra no saldo.', 'Exporta para Excel.'], f: ['Custo e venda calculados', 'Fechamentos e compras lançados', 'Ler saldo previsto e real'] },
   R_DRE: { r: 'Demonstrativo econômico: venda, impostos, custo direto, indireto, CSLL e IR, total, por ano e realizado até o último fechamento.', d: ['Impostos e regime (lucro real ou presumido) vêm dos parâmetros do cronograma.', 'A coluna Realizado usa os meses com fechamento lançado: receita pelo avanço real e custos reais.'], f: ['Parâmetros definidos', 'Ler resultado por ano', 'Exportar'] },
   RELS: { r: 'SESMT: EPI, exames (PCMSO), grupos GHE e dimensionamento do SESMT a partir do efetivo previsto.', d: ['Usa o histograma de mão de obra do projeto.'], f: ['Efetivo previsto', 'Gerar relatórios de SST'] },
-  SIS: { r: 'Configurações: preferências (tema, tamanho da letra, idioma), formatos de data, hora e moeda e parâmetros gerais (empresa, encargos).', d: ['Tema e letra valem para o navegador; formatos e parâmetros valem para todos. Parâmetros gerais só administradores alteram.'], f: ['Ajustar preferências', 'Definir parâmetros da empresa'] },
+  SIS: { r: 'Configurações: preferências (tema, tamanho da letra, idioma, formatos de data, hora e moeda) e cadastros do sistema (unidades de medida, modelo de grupos de atividade, listas dos bancos de dados, exames por GHE, kits de EPI).', d: ['Tema e letra valem para o navegador; formatos e cadastros valem para todos. Só administradores acessam.', 'Os parâmetros da empresa (encargos, salários, benefícios, combustível, viagens, centros de custo gerais, feriados) ficam em Dados do projeto › De todos os projetos.'], f: ['Ajustar preferências', 'Manter os cadastros do sistema'] },
   DADOS: { r: 'Dados e verificação: recarrega bancos e projetos do servidor, recalcula o projeto aberto e mostra a lista de erros.', d: ['Use quando outra pessoa alterou dados ou para conferir inconsistências antes de emitir relatórios.'], f: ['Atualizar base de dados', 'Atualizar projeto', 'Corrigir a lista de erros'] },
   CLI: { r: 'Cadastro de clientes e empresas: razão social, CNPJ, contatos e logos usados nos projetos e relatórios.', d: ['Só administradores alteram.'], f: ['Cadastrar empresa e logo', 'Vincular ao projeto'] },
   USR: { r: 'Cadastro de usuários: define, para cada pessoa, quais seções e quais projetos ela pode editar, só visualizar ou não acessar.',
