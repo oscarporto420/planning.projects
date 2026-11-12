@@ -1593,7 +1593,7 @@ function shTabelas(p) {
         cfgCampo('cp-f', 'Situação da obra', p.fase || 'EM PLANEJAMENTO', function (x) { p.fase = x; svp(); }, { ops: ['EM PLANEJAMENTO', 'EM ANDAMENTO', 'CONCLUIDA'], rotulos: FASES }) +
         cfgCampo('cp-ex', 'Empresa executora', empresaRot(), null, { ro: true, dica: 'Definida em Dados do projeto › Empresa executora (vale para todos os projetos).' }) +
         cfgCampo('cp-s', 'Visibilidade', p.liberado ? 'Liberado para convidados' : 'Rascunho (só o administrador vê)', null, { ro: true, dica: ed ? 'Altere com o botão Liberar / Tornar rascunho, no topo.' : '' }) + '</div>') +
-      cfgLogos(p, svp) + cfgInicio(p, svp) + (p.categoria === 'UFV' ? cfgUfv(p, svp) : p.categoria === 'SE' ? cfgSe(p, svp) : p.categoria === 'EOL' ? cfgEol(p, svp) : '') + cfgContratante(p, svp) + cfgLocal(p, svp) + cfgBdi(p, svp) +
+      cfgLogos(p, svp) + cfgInicio(p, svp) + (p.categoria === 'UFV' ? cfgUfv(p, svp) : p.categoria === 'SE' ? cfgSe(p, svp) : p.categoria === 'EOL' ? cfgEol(p, svp) : '') + cfgCcs(p, svp) + cfgContratante(p, svp) + cfgLocal(p, svp) + cfgBdi(p, svp) +
       '<div class="duo">' + cfgCard('Grupos de atividade', 'Etapas da obra: formam o primeiro nível da numeração (1, 2, 3…) na FIN e na COM. Ajuste para o tipo de obra deste projeto.', cfgLista('pg', p.grupos, svp, 'Grupo', { num: true, rem: function (r) {
         var i = p.grupos.indexOf(r), n = p.atividades.filter(function (a) { return a.grupo === i + 1; }).length;
         if (n) return msgbox('AVISO!', 'O grupo ' + r + ' tem ' + n + ' atividade(s). Exclua ou mova as atividades antes de excluir o grupo.');
@@ -4728,7 +4728,7 @@ function cmdAtividades() { S.v.dlg = { tipo: 'ativ', aba: 0, grupo: '', ativ: ''
 function dlgAtiv(d) {
   var p = proj(), t = S.base.tabelas, grupos = gruposDe(p), ok = !!d.grupo && (d.aba === 0 || !!d.ativ), off = !ok;
   var doGrupo = p.atividades.filter(function (a) { return a.grupo === d.grupo; }).sort(function (a, b) { return num(a.ordem) - num(b.ordem); });
-  var gnome = grupos[d.grupo - 1], ccs = t.centrosCusto.filter(function (c) { return d.todos || c.g === gnome; }).map(function (c) { return c.d; });
+  var gnome = grupos[d.grupo - 1], ccL = ccLista(p), ccs = ccL.filter(function (c) { return d.todos || c.g === gnome || (p.ccs && p.ccs.length && semAcento(gnome || '') === 'INDIRETOS' && c.t === 'I'); }).map(function (c) { return c.d; }); if (!ccs.length && p.ccs && p.ccs.length) ccs = ccL.map(function (c) { return c.d; });
   if (d.cc && ccs.indexOf(d.cc) < 0) ccs.unshift(d.cc);
   var rot = {}; grupos.forEach(function (g, i) { rot[i + 1] = g; });
   var limpa = function () { d.ativ = ''; d.nome = ''; d.trecho = ''; d.cc = ''; d.uni = ''; d.qtd = 0; d.equipes = ''; d.todos = false; };
@@ -4901,7 +4901,7 @@ function dlgExp(d) {
 }
 
 /* ================= início ================= */
-window.__custo = { S: S, render: render, calc: calc, croCalc: croCalc, croCarregar: croCarregar, custoResumo: custoResumo, salvarMeta: salvarMeta, GRUPOS_ABAS: GRUPOS_ABAS, NOMES: NOMES, nivelAba: nivelAba, nivelProj: nivelProj, podeEditar: podeEditar, podeGravar: podeGravar, proj: proj, zipUm: zipUm, croXml: croXml, relRecursos: relRecursos, idrEfetivo: idrEfetivo, cpuDados: cpuDados, cpuCalc: cpuCalc, croRecriarCpus: croRecriarCpus, croCarregar: croCarregar, croGerarFin: croGerarFin, croDeFin: croDeFin, croCompletarLb: croCompletarLb, croDistribuir: croDistribuir, croRemoverChaves: croRemoverChaves, croRecriarCpus2: null, salvarBase: salvarBase, salvarMeta: salvarMeta, apagarAtiv: apagarAtiv, cpuChaves: cpuChaves, croCalc: croCalc, croResultado: croResultado, calc: calc, novoProjeto: novoProjeto, proj: proj, cfgFalta: cfgFalta, croGerarPadrao: croGerarPadrao, croLerXml: croLerXml, croGravarTudo: croGravarTudo, croParam: croParam, supCalc: supCalc };
+window.__custo = { S: S, render: render, ccGerar: ccGerar, calc: calc, croCalc: croCalc, croCarregar: croCarregar, custoResumo: custoResumo, salvarMeta: salvarMeta, GRUPOS_ABAS: GRUPOS_ABAS, NOMES: NOMES, nivelAba: nivelAba, nivelProj: nivelProj, podeEditar: podeEditar, podeGravar: podeGravar, proj: proj, zipUm: zipUm, croXml: croXml, relRecursos: relRecursos, idrEfetivo: idrEfetivo, cpuDados: cpuDados, cpuCalc: cpuCalc, croRecriarCpus: croRecriarCpus, croCarregar: croCarregar, croGerarFin: croGerarFin, croDeFin: croDeFin, croCompletarLb: croCompletarLb, croDistribuir: croDistribuir, croRemoverChaves: croRemoverChaves, croRecriarCpus2: null, salvarBase: salvarBase, salvarMeta: salvarMeta, apagarAtiv: apagarAtiv, cpuChaves: cpuChaves, croCalc: croCalc, croResultado: croResultado, calc: calc, novoProjeto: novoProjeto, proj: proj, cfgFalta: cfgFalta, croGerarPadrao: croGerarPadrao, croLerXml: croLerXml, croGravarTudo: croGravarTudo, croParam: croParam, supCalc: supCalc };
 temaAplica(); render();
 carregar().then(function () {
   /* projetos antigos: passam a ter a própria lista de grupos de atividade */
@@ -6870,7 +6870,7 @@ var MANUAL = {
     d: ['Clique em um projeto para abri-lo; o nome e a revisão aparecem no topo da tela em todas as guias.', 'Novo cria um projeto em rascunho (só administradores veem rascunhos). Liberar publica o projeto para os usuários com acesso a ele; Tornar rascunho recolhe.', 'Duplicar copia o projeto aberto. Excluir apaga o projeto e as revisões (não pode ser desfeito).', 'Baixar backup e Restaurar backup salvam e recarregam projetos em arquivo. Exportar tudo (Supabase) gera o arquivo completo para a versão com login.'],
     f: ['Novo projeto (rascunho)', 'Preencher Dados do projeto', 'Montar cronograma e custos', 'Liberar para a equipe', 'Acompanhar pela carteira'] },
   CONFIG: { r: 'Cadastro do projeto: tipo de obra, identificação, contrato, contratante, local, prazos, calendário, clima, reajustes e BDI. É daqui que sai o cronograma padrão.',
-    d: ['O primeiro item é o tipo do projeto (subestação, eólico, parque solar, estrada, edificação, ETE…). Ele define o modelo de cronograma padrão e os dados técnicos pedidos (ex.: MWp e estruturas no solar; frentes, km e aerogeradores no eólico).', 'Os quadros Contratante e Local alimentam o RDO, os relatórios e o Sobre. Responsáveis, prazo e valor guardam datas e valor do contrato; BDI contratual calcula o BDI pela fórmula escolhida.', 'Calendário (jornada, feriados, paralisações) e clima definem os dias úteis usados em todo o planejamento.', 'Gerar cronograma padrão monta a EAP OP Consulting com marcos, engenharia, suprimentos, construção, comissionamento e encerramento a partir dos dados técnicos; a lista "falta preencher" mostra o que ainda impede a geração.'],
+    d: ['O primeiro item é o tipo do projeto (subestação, eólico, parque solar, estrada, edificação, ETE…). Ele define o modelo de cronograma padrão e os dados técnicos pedidos (ex.: MWp e estruturas no solar; frentes, km e aerogeradores no eólico).', 'Os quadros Contratante e Local alimentam o RDO, os relatórios e o Sobre. Responsáveis, prazo e valor guardam datas e valor do contrato; BDI contratual calcula o BDI pela fórmula escolhida.', 'Calendário (jornada, feriados, paralisações) e clima definem os dias úteis usados em todo o planejamento.', 'Centros de custo do projeto: lista própria gerada pelo tipo de obra — diretos por frente de serviço (obra civil, montagem mecânica, montagem elétrica, comissionamento, fornecimento) e indiretos por natureza (MO indireta, veículos leves, equipamentos de apoio, diesel, gasolina, agregados, transportes, fretes, taxas, seguros, contingências). Código SIGLA.G.SEQ; a lista alimenta as atividades e o Fechamento mensal.', 'Gerar cronograma padrão monta a EAP OP Consulting com marcos, engenharia, suprimentos, construção, comissionamento e encerramento a partir dos dados técnicos; a lista "falta preencher" mostra o que ainda impede a geração.'],
     f: ['Escolher o tipo do projeto', 'Preencher identificação, contrato e local', 'Informar dados técnicos do tipo', 'Conferir calendário e BDI', 'Gerar cronograma padrão'] },
   GRA: { r: 'Painel de gráficos: visão rápida do projeto com custo previsto × realizado acumulado e CPI, curva S, resumo econômico e rankings de custo.',
     d: ['Os números vêm do cronograma, do avanço lançado e do custo calculado; não há digitação nesta guia.', 'Use para reuniões de acompanhamento e para conferir rapidamente se o projeto está adiantado ou atrasado.'],
@@ -7261,6 +7261,7 @@ function shFech(p) {
   /* custo real */
   var eap = [], cc = idrAtivs(p).map(function (a) { return a.nome; });
   if (p.crono && p._cro) p._cro.tasks.forEach(function (x) { if (x.l >= 1 && x.l <= 2) eap.push(x.w + ' ' + x.n); });
+  if (p.ccs && p.ccs.length) { eap = p.ccs.filter(function (c) { return c.t !== 'I'; }).map(function (c) { return c.d; }).concat(eap); cc = p.ccs.filter(function (c) { return c.t === 'I'; }).map(function (c) { return c.d; }).concat(cc); }
   s += '<div class="gc"><h3>Custo real do mês</h3><p class="aj">Lance o que foi gasto no mês (notas, folha, medições de terceiros, aluguel de equipamentos…). Direto = obra; indireto = administração, canteiro, apoio.</p>' +
     '<div class="tw"><table class="g fech-t"><thead><tr><th>TIPO</th><th>CATEGORIA</th><th class="l">EAP / CENTRO DE CUSTO</th><th class="l">DESCRIÇÃO / DOCUMENTO</th><th>VALOR (R$)</th>' + (ed ? '<th></th>' : '') + '</tr></thead><tbody>' +
     (doc.custo.length ? doc.custo.map(function (l, i) {
@@ -7425,6 +7426,59 @@ function mapaAvPainel(p, tipo, M, ed) {
     s += '<details class="mp-vd"' + (V.vincAb ? ' open' : '') + '><summary ' + h(function () { V.vincAb = !V.vincAb; }) + '>Ligar elementos às áreas (' + sem.length + ' sem área)</summary><p class="mp-av-n">A ligação automática compara o nome do elemento com o nome da área (ex.: “SPGA.01.01”). Para os demais, escolha a área.</p>' + sem.concat(lig).slice(0, 400).map(linha).join('') + '</details>';
   }
   return s;
+}
+
+
+/* ================= CENTROS DE CUSTO DO PROJETO =================
+   Cada projeto tem a sua lista (p.ccs), gerada pelo tipo de obra: diretos por frente de serviço (civil, mecânica,
+   elétrica, comissionamento, fornecimento) e indiretos por natureza (MO indireta, veículos leves, equipamentos de apoio,
+   diesel, gasolina, agregados, transportes, fretes, taxas, seguros, contingências…). Código: SIGLA.G.SEQ.
+   G: 0 indiretos gerais · 1 administração local · 2 canteiro · 3 serviços preliminares · 4 obra civil · 5 montagem mecânica
+   · 6 montagem elétrica · 7 comissionamento · 8 fornecimento. Sem lista própria, vale a lista geral (Configurações). */
+var CC_GRUPO = { 0: 'INDIRETOS', 1: 'ADMINISTRACAO', 2: 'CANTEIROS', 3: 'SERVICOS PRELIMINARES', 4: 'OBRA CIVIL', 5: 'MONTAGEM MECANICA', 6: 'MONTAGEM ELETRICA', 7: 'COMISSIONAMENTO', 8: 'FORNECIMENTO MATERIAIS' };
+var CC_IND = [[0, 100, 'ENGENHARIA / PROJETOS', 0], [0, 101, 'TESTES / ENSAIOS', 0], [0, 102, 'TAXAS, LICENCAS E EMOLUMENTOS', 0], [0, 103, 'SEGUROS / FIANCAS / GARANTIAS', 0], [0, 104, 'CONTINGENCIAS', 0],
+  [1, 100, 'ADMINISTRACAO LOCAL - MAO DE OBRA INDIRETA', 1], [1, 101, 'VEICULOS LEVES', 1], [1, 102, 'EQUIPAMENTOS DE APOIO', 1], [1, 103, 'COMBUSTIVEL - DIESEL', 1], [1, 104, 'COMBUSTIVEL - GASOLINA', 1], [1, 105, 'TRANSPORTE DE PESSOAL', 1], [1, 106, 'FRETES', 1], [1, 107, 'AGREGADOS (AREIA, BRITA, CASCALHO)', 1],
+  [2, 100, 'MOBILIZACAO, DESMOBILIZACAO E MONTAGEM DO CANTEIRO', 1], [2, 101, 'OPERACAO E MANUTENCAO DO CANTEIRO', 1], [3, 100, 'TOPOGRAFIA, SONDAGEM E RESISTIVIDADE', 1]];
+var CC_DIR = {
+  UFV: [[4, 100, 'SUPRESSAO VEGETAL E LIMPEZA'], [4, 101, 'TERRAPLENAGEM'], [4, 102, 'DRENAGEM'], [4, 103, 'ACESSOS E VIAS INTERNAS'], [4, 104, 'CERCAMENTO E PORTARIA'], [4, 105, 'FUNDACOES - CRAVACAO DE ESTACAS'], [4, 106, 'BASES DE ELETROCENTROS / INVERSORES / TRANSFORMADORES'], [4, 107, 'VALAS, ESCAVACAO E REATERRO DE CABOS'], [4, 108, 'EDIFICACOES (O&M, ALMOXARIFADO, SALA DE CONTROLE)'],
+    [5, 100, 'MONTAGEM DE TRACKERS / ESTRUTURAS'], [5, 101, 'MONTAGEM DE MODULOS FOTOVOLTAICOS'], [5, 102, 'MONTAGEM DE ELETROCENTROS / INVERSORES / TRANSFORMADORES'],
+    [6, 100, 'CABEAMENTO CC (STRINGS E STRING BOX)'], [6, 101, 'CABEAMENTO CA / MEDIA TENSAO'], [6, 102, 'SISTEMA DE ATERRAMENTO E SPDA'], [6, 103, 'SCADA, TELECOM E CFTV'], [6, 104, 'ILUMINACAO E SERVICOS AUXILIARES'], [6, 105, 'SUBESTACAO ELEVADORA E LINHA DE CONEXAO'],
+    [7, 100, 'COMISSIONAMENTO A FRIO'], [7, 101, 'COMISSIONAMENTO A QUENTE E ENERGIZACAO'], [7, 102, 'OPERACAO ASSISTIDA / TESTES DE DESEMPENHO'], [8, 100, 'FORNECIMENTO DE EQUIPAMENTOS E MATERIAIS']],
+  EOL: [[4, 100, 'SUPRESSAO VEGETAL E LIMPEZA'], [4, 101, 'ACESSOS E ESTRADAS INTERNAS'], [4, 102, 'DRENAGEM'], [4, 103, 'PLATAFORMAS DE MONTAGEM'], [4, 104, 'FUNDACOES DOS AEROGERADORES'], [4, 105, 'USINA DE CONCRETO'], [4, 106, 'OBRAS CIVIS DA SUBESTACAO E EDIFICACOES'],
+    [5, 100, 'MONTAGEM DE AEROGERADORES (TORRE, NACELE, ROTOR)'], [5, 101, 'MONTAGEM ELETROMECANICA DA SUBESTACAO'],
+    [6, 100, 'REDE DE MEDIA TENSAO (AEREA / SUBTERRANEA)'], [6, 101, 'SISTEMA DE ATERRAMENTO E SPDA'], [6, 102, 'SCADA, FIBRA OPTICA E TELECOM'], [6, 103, 'SUBESTACAO COLETORA E LINHA DE TRANSMISSAO'],
+    [7, 100, 'COMISSIONAMENTO DA REDE DE MEDIA TENSAO E SUBESTACAO'], [7, 101, 'COMISSIONAMENTO DOS AEROGERADORES E ENERGIZACAO'], [8, 100, 'FORNECIMENTO DE EQUIPAMENTOS E MATERIAIS']],
+  SE: [[4, 101, 'TERRAPLENAGEM'], [4, 102, 'DRENAGEM'], [4, 103, 'MALHA DE TERRA'], [4, 104, 'FUNDACOES / BASES / PAREDES CORTA-FOGO / CX SEPARADORA DE OLEO'], [4, 105, 'CANALETAS E DUTOS'], [4, 106, 'EDIFICACOES / SISTEMA DE AGUA E ESGOTO'], [4, 107, 'URBANIZACAO / PROTECAO CONTRA INCENDIO / AR CONDICIONADO'],
+    [5, 100, 'MONTAGEM DE ESTRUTURAS, SUPORTES E BARRAMENTOS'], [5, 101, 'MONTAGEM DE EQUIPAMENTOS AT'],
+    [6, 100, 'MONTAGEM DE EQUIPAMENTOS EXTERNOS 13,8 KV - SERVICOS AUXILIARES'], [6, 101, 'MONTAGEM E INTERLIGACAO SPCS / TELECOM / CFTV'], [6, 102, 'MONTAGEM E INTERLIGACAO SERVICOS AUXILIARES CA/CC'], [6, 103, 'MONTAGEM DE ELETRODUTOS E ACESSORIOS'], [6, 104, 'MONTAGEM DE CABOS DE FORCA E CONTROLE'], [6, 105, 'MONTAGEM DO SISTEMA DE ATERRAMENTO'], [6, 106, 'MONTAGEM DE ILUMINACAO EXTERNA / PROTECAO CONTRA INCENDIO'],
+    [7, 100, 'COMISSIONAMENTO'], [8, 100, 'FORNECIMENTO DE EQUIPAMENTOS E MATERIAIS']],
+  GEN: [[4, 100, 'TERRAPLENAGEM'], [4, 101, 'DRENAGEM'], [4, 102, 'FUNDACOES'], [4, 103, 'ESTRUTURA'], [4, 104, 'ALVENARIA E VEDACOES'], [4, 105, 'PAVIMENTACAO'], [4, 106, 'ACABAMENTOS'],
+    [5, 100, 'MONTAGEM MECANICA E DE EQUIPAMENTOS'], [6, 100, 'INSTALACOES ELETRICAS'], [6, 101, 'INSTALACOES HIDROSSANITARIAS'], [7, 100, 'COMISSIONAMENTO E TESTES'], [8, 100, 'FORNECIMENTO DE EQUIPAMENTOS E MATERIAIS']]
+};
+function ccSigla(p) { var s = semAcento(p.sigla || '').replace(/[^A-Z0-9]/g, ''); if (s) return s.slice(0, 6); var w = semAcento(p.nome || 'OBRA').replace(/[^A-Z ]/g, ' ').split(/\s+/).filter(function (x) { return x.length > 2 && ['UFV', 'SE', 'PARQUE', 'EOLICO', 'SOLAR', 'MWP', 'KV'].indexOf(x) < 0; }); return (w.map(function (x) { return x.charAt(0); }).join('') || 'OBRA').slice(0, 4); }
+function ccModelo(p) { var c = tipoCat(p.tipo || '') || p.categoria; return c === 'UFV' || c === 'EOL' || c === 'SE' ? c : 'GEN'; }
+function ccGerar(p) {
+  var sg = ccSigla(p), L = [];
+  var add = function (g, seq, nome, plan, t) { L.push({ d: sg + '.' + g + '.' + seq + ' - ' + nome, red: sg + g + seq, plan: !!plan, g: CC_GRUPO[g], t: t }); };
+  CC_IND.forEach(function (x) { add(x[0], x[1], x[2], x[3], 'I'); });
+  CC_DIR[ccModelo(p)].forEach(function (x) { add(x[0], x[1], x[2], 1, 'D'); });
+  L.sort(function (a, b) { return a.red < b.red ? -1 : a.red > b.red ? 1 : 0; });
+  return L;
+}
+/* lista em uso no projeto: própria ou a geral */
+function ccLista(p) { return p && p.ccs && p.ccs.length ? p.ccs : (S.base.tabelas.centrosCusto || []); }
+function cfgCcs(p, svp) {
+  var ed = podeEditar(), L = p.ccs || [], modelo = { UFV: 'parque solar', EOL: 'parque eólico', SE: 'subestação', GEN: 'obra civil geral' }[ccModelo(p)];
+  var gerar = function (substituir) {
+    var novos = ccGerar(p);
+    if (substituir || !L.length) p.ccs = novos;
+    else { var ex = {}; L.forEach(function (c) { ex[c.red] = 1; }); novos.forEach(function (c) { if (!ex[c.red]) L.push(c); }); L.sort(function (a, b) { return a.red < b.red ? -1 : a.red > b.red ? 1 : 0; }); }
+    svp(); agendar();
+  };
+  var corpo = L.length ? cfgTab(bloco('pcc', '', L, [{ k: 'd', rot: 'Centro de custo' }, { k: 'red', rot: 'Reduzido' }, { k: 't', rot: 'Tipo', ops: ['DIRETO', 'INDIRETO'], get: function (r) { return r.t === 'I' ? 'INDIRETO' : 'DIRETO'; }, set: function (r, x) { r.t = /^I/.test(x) ? 'I' : 'D'; } }, { k: 'plan', rot: 'Usado no planejamento', ops: ['SIM', 'NAO'], get: function (r) { return r.plan ? 'SIM' : 'NAO'; }, set: function (r, x) { r.plan = x === 'SIM'; } }, { k: 'g', rot: 'Grupo', ops: Object.keys(CC_GRUPO).map(function (k) { return CC_GRUPO[k]; }) }], svp, function () { return { d: ccSigla(p) + '.0.000 - NOVO CENTRO DE CUSTO', red: '', plan: true, g: 'INDIRETOS', t: 'I' }; }))
+    : '<p class="aj">O projeto usa a lista geral de Configurações › Centros de custo (' + (S.base.tabelas.centrosCusto || []).length + ' centros). Gere a lista própria para separar os centros deste projeto.</p>';
+  return cfgCard('Centros de custo do projeto', (L.length ? L.length + ' centros · ' + L.filter(function (c) { return c.t !== 'I'; }).length + ' diretos e ' + L.filter(function (c) { return c.t === 'I'; }).length + ' indiretos' : 'Sem lista própria') + ' · modelo: ' + modelo + ' · código ' + ccSigla(p) + '.G.SEQ',
+    corpo + (ed ? '<div class="row" style="gap:8px;margin-top:8px">' + bt(L.length ? 'Incluir os que faltam do modelo' : 'Gerar pelo tipo de obra', function () { gerar(false); }, 'lk') + (L.length ? bt('Refazer pelo modelo', function () { confirma('Substituir a lista de centros de custo do projeto pelo modelo de ' + modelo + '?\n\nCentros incluídos à mão serão perdidos.', function () { gerar(true); }); }, 'lk') : '') + '</div>' : ''));
 }
 
 })();
