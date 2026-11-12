@@ -233,11 +233,12 @@ function carregar() {
 }
 function lerTudo() {
   S.base = {}; S.projetos = []; S.clientes = []; S.cache = {}; S.ctx = null;
-  var raizes = S.papel.dono ? ['projetos', 'rascunhos'] : ['projetos'];
+  /* rascunhos: lidos por todos os administradores (dono e marcados no Cadastro de usuários); quem não pode ler recebe erro ou lista vazia */
+  var raizes = ['projetos', 'rascunhos'];
   return db.collection('base').get().then(function (snap) {
     snap.docs.forEach(function (d) { S.base[d.id] = clone(d.data()); }); cpuInsJuntar(); bancosJuntar();
     return Promise.all(raizes.map(function (rz) {
-      return db.collection(rz).get().then(function (ps) {
+      return db.collection(rz).get().catch(function () { return { docs: [] }; }).then(function (ps) {
         return Promise.all(ps.docs.map(function (d) {
           var p = clone(d.data()); p.id = d.id; p._raiz = rz; p.liberado = rz === 'projetos'; p.atividades = [];
           S.projetos.push(p);
@@ -263,6 +264,7 @@ function usrAplicar() {
   var em = String(S.papel.email || '').trim().toLowerCase(), u = (S.usuarios || []).filter(function (x) { return (S.papel.uid && x.uid === S.papel.uid) || (em && String(x.email || '').trim().toLowerCase() === em); })[0];
   if (u) { S.papel.reg = u; if (u.admin) { S.papel.admin = true; return; } S.perm = u; }
   else if ((S.usrCfg || {}).semCadastro === 'N') S.perm = { secoes: {}, projetos: {}, secPadrao: '', projPadrao: '', semCadastro: true };
+  S.projetos = S.projetos.filter(function (p) { return p._raiz !== 'rascunhos'; });
   if (S.perm) S.projetos = S.projetos.filter(function (p) { return nivelProj(p) !== ''; });
 }
 var baseOk = function () { return !!(S.base.tabelas && S.base.mao); };
