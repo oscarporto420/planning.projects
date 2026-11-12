@@ -4947,7 +4947,10 @@ function rdoSalvar(p, id) { if (id === 'cfg') gravar(rdoRaiz(p) + '/cfg', p._rdo
 /* configuração do cabeçalho: o que não for digitado vem do cadastro do projeto */
 function rdoCfg(p) {
   var c = p._rdo.cfg, r = p.resp || {}, ct = p.contratante || {}, l = p.local || {}, cr = p.crono || {};
-  var ini = c.ini || r.inicio || String(cr.inicio || '').slice(0, 10), fim = r.termino || String(cr.fim || '').slice(0, 10);
+  /* nº do RDO conta a partir da LNTP ou da assinatura do contrato, o que vier primeiro */
+  var ct0 = p.contrato || {}, okD = function (x) { x = String(x || '').slice(0, 10); return /^\d{4}-\d\d-\d\d$/.test(x) && +x.slice(0, 4) > 1990 ? x : ''; };
+  var marcos = [okD(ct0.lntp), okD(ct0.assinatura)].filter(Boolean).sort();
+  var ini = okD(c.ini) || marcos[0] || okD(r.inicio) || okD(ct0.inicio) || okD(cr.inicio), fim = okD(r.termino) || okD(ct0.termino) || okD(cr.fim);
   var prazo = num(c.prazo) || num(r.prazo) || (ini && fim ? E.day(fim) - E.day(ini) + 1 : 0);
   var end = [l.logradouro, l.municipio && (l.municipio + (l.uf ? ' - ' + l.uf : ''))].filter(Boolean).join(', ');
   var emp = S.base.empresa || {};
@@ -5164,7 +5167,7 @@ function rdoCfgForm(p, cf) {
   var aprov = c.aprov || (cf.aprov.map(function () { return {}; }));
   return '<div class="gc rdo-cfg"><h3>Cabeçalho e aprovadores do RDO</h3><p class="vz">Campos vazios usam o cadastro do projeto (mostrado em cinza).</p><div class="rdo-cff">' +
     f('Obra', 'obra') + f('Endereço', 'endereco') + f('Contratante (cliente)', 'contratante') + f('Contratada', 'contratada') + f('Responsável', 'responsavel') + f('Nº do contrato', 'contrato') +
-    f('Data do 1º relatório', 'ini', 'date', 'início do prazo contratual') + f('Nº do 1º relatório', 'n0', 'number') + f('Prazo contratual (dias)', 'prazo', 'number') +
+    f('Data do 1º relatório', 'ini', 'date', 'LNTP ou assinatura do contrato, o que vier primeiro') + f('Nº do 1º relatório', 'n0', 'number') + f('Prazo contratual (dias)', 'prazo', 'number') +
     '<label>Efetivo calculado por<select ' + h(function (el) { c.base = el.value; sv(); }) + '><option value="PA"' + (cf.base === 'PA' ? ' selected' : '') + '>Produção do dia (Planilha de avanço)</option><option value="CRO"' + (cf.base === 'CRO' ? ' selected' : '') + '>Previsto no cronograma</option></select></label>' +
     '<label>Arredondamento<select ' + h(function (el) { c.arred = el.value; sv(); }) + '><option value="R"' + (cf.arred === 'R' ? ' selected' : '') + '>Ao inteiro mais próximo</option><option value="C"' + (cf.arred === 'C' ? ' selected' : '') + '>Sempre para cima</option></select></label></div>' +
     '<h4>Aprovadores</h4><div class="rdo-cff">' + [0, 1, 2].map(function (i) {
