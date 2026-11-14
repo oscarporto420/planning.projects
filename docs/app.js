@@ -388,6 +388,7 @@ function render() {
   var alvo = abrirDepois || proxima || fid, el = alvo && document.getElementById(alvo);
   if (el) { try { el.focus({ preventScroll: !(abrirDepois || proxima) }); if (selp != null && el.setSelectionRange) el.setSelectionRange(selp, selp); } catch (e) { } }
   if (abrirDepois && el) { var a = abrirDepois; abrirDepois = null; proxima = null; abrir(el); void a; }
+  if (S._focoProx) { var fx = document.getElementById(S._focoProx); if (fx) { S._focoProx = null; fx.focus(); try { fx.select(); } catch (e) { } } }
   abrirDepois = null; proxima = null;
   if (IDI.M || idiLer() !== 'pt') idiAplica();
 }
@@ -619,7 +620,7 @@ var ICA = {
 };
 var LOGO_OP = '<svg viewBox="0 0 40 52" aria-hidden="true"><circle cx="21" cy="19.5" r="14.5" fill="none" stroke="currentColor" stroke-width="9.5"/><rect x="2" y="19.5" width="9.5" height="31" fill="#2f62f2"/></svg>';
 /* marca d'água da OP Consulting: gráficos e relatórios na tela (CSS) e planilhas exportadas (imagem de fundo + cabeçalho/rodapé) */
-var WM_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 96"><g opacity="0.11"><circle cx="45" cy="37" r="26" fill="none" stroke="#5b6b82" stroke-width="17"/><rect x="11" y="37" width="17" height="55" fill="#2f62f2"/><text x="86" y="50" font-family="Poppins,Segoe UI,Arial,sans-serif" font-size="34" font-weight="600" fill="#5b6b82">OP Consulting</text><text x="87" y="76" font-family="Segoe UI,Arial,sans-serif" font-size="15" fill="#5b6b82" letter-spacing="2">PLANNING PROJECTS</text></g></svg>';
+var WM_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 96"><g opacity="0.11"><circle cx="45" cy="37" r="26" fill="none" stroke="#5b6b82" stroke-width="17"/><rect x="11" y="37" width="17" height="55" fill="#2f62f2"/><text x="86" y="50" font-family="Poppins,Segoe UI,Arial,sans-serif" font-size="34" font-weight="600" fill="#5b6b82">OP Consulting</text><text x="87" y="76" font-family="Segoe UI,Arial,sans-serif" font-size="15" fill="#5b6b82" letter-spacing="2">PLANNING PROJECTS</text></g></svg>';
 (function () { try { document.documentElement.style.setProperty('--wm', 'url("data:image/svg+xml;charset=utf-8,' + encodeURIComponent(WM_SVG) + '")'); } catch (e) { } })();
 var WM_PNG = null;
 function opMarcaPng() {
@@ -649,7 +650,7 @@ function faixa() {
   var papel = !S.pronto ? 'Carregando…' : S.semDb ? 'Sem conexão com os dados' : (ehAdmin() ? 'Administrador' : S.perm && !S.perm.semCadastro && (Object.keys(S.perm.secoes || {}).some(function (k) { return S.perm.secoes[k] === 'E'; }) || S.perm.secPadrao === 'E') ? 'Usuário' : 'Usuário (somente leitura)') + (S.papel.nome ? ' · ' + esc(S.papel.nome) : '');
   if (rotuloPapel) papel = rotuloPapel(papel);
   if (telaExtra && telaExtra() != null) return '<div class="topo"><div class="tt"><h1>Planning Projects</h1><p>Planejamento e custo de obras · OP Consulting</p></div><div class="topo-d"><span class="quem">' + papel + '</span></div></div>';
-  var s = '<div class="topo"><div class="tt"><h1>' + (ok ? NOMES[S.v.aba] || S.v.aba : 'Planning Projects') + '</h1><p>' + (p ? esc(p.nome) + (p.tipo ? ' · ' + esc(tipoNome(p)) + (portePorTipo(p) ? ' ' + esc(nf2.format(portePorTipo(p)).replace(/,00$/, '')) + ' ' + esc(tipoUn(p)) : '') : '') + (p.fase && p.fase !== 'EM PLANEJAMENTO' ? ' · ' + FASES[p.fase] : '') + (temBaseP(p) ? ' · base de preços própria' : '') + (p.liberado ? '' : ' · rascunho') : ok ? 'Nenhum projeto selecionado' : 'Planejamento e custo de obras · OP Consulting') + '</p></div><div class="topo-d">';
+  var s = '<div class="topo"><div class="tt"><h1>' + logosTopo(p) + (ok ? NOMES[S.v.aba] || S.v.aba : 'Planning Projects') + '</h1><p>' + (p ? esc(p.nome) + (p.tipo ? ' · ' + esc(tipoNome(p)) + (portePorTipo(p) ? ' ' + esc(nf2.format(portePorTipo(p)).replace(/,00$/, '')) + ' ' + esc(tipoUn(p)) : '') : '') + (p.fase && p.fase !== 'EM PLANEJAMENTO' ? ' · ' + FASES[p.fase] : '') + (temBaseP(p) ? ' · base de preços própria' : '') + (p.liberado ? '' : ' · rascunho') : ok ? 'Nenhum projeto selecionado' : 'Planejamento e custo de obras · OP Consulting') + '</p></div><div class="topo-d">';
   s += '<div class="rproj"><select id="selproj" aria-label="Projeto" ' + h(function (el) { var v = el.value; el.value = S.v.pid || ''; if (!v) { S.v.pid = null; S.v.aba = 'PROJETOS'; agendar(); return; } trocaProj(v, function () { if (S.v.aba === 'PROJETOS') S.v.aba = 'GRA'; }); }) + '><option value="">(selecione o projeto)</option>' +
     S.projetos.map(function (x) { return '<option value="' + x.id + '"' + (p && (p._orig || p.id) === x.id ? ' selected' : '') + '>' + esc(x.nome) + (x.liberado ? '' : ' [rascunho]') + '</option>'; }).join('') + '</select>' +
     (ehAdmin() && db && ok && !(p && p._rev) ? '<div class="row"><button class="lk" ' + h(function () { novoProjeto(); agendar(); }) + '>Novo</button><button class="lk"' + (p ? '' : ' disabled') + ' ' + h(function () { novoProjeto(p); agendar(); }) + '>Duplicar</button>' +
@@ -705,6 +706,7 @@ function pagina() {
   if (a === 'MANUAL') f = shManual;
   if (a === 'REVC') f = shRevc;
   if (a === 'FECH') f = shFech;
+  if (a === 'CURVAS') f = shCurvas;
   if (!f && (/^R_/.test(a) || a === 'HISP')) f = shRelt;
   return f ? f(p) : '';
 }
@@ -2531,7 +2533,7 @@ function shCro(p) {
   var V = S.v.cro || (S.v.cro = { vis: 'E', nivel: 3, exp: {}, busca: '', macros: false });
   var R = croCalc(p), ed = podeEditar(), tot = R.tot;
   var tabs = '<div class="tabs" role="tablist">' + [['E', 'EAP e Gantt'], ['S', 'Curva S'], ['R', 'Venda × custo × resultado']].map(function (a) { return '<button role="tab" aria-selected="' + (V.vis === a[0]) + '" class="' + (V.vis === a[0] ? 'on' : '') + '" ' + h(function () { V.vis = a[0]; agendar(); }) + '>' + a[1] + '</button>'; }).join('') + '</div>';
-  var s = titulo('CRONOGRAMA FÍSICO', tabs + croStatusCampo(p, R) + '<button class="bxl" data-tip="Arquivo .zip com o XML do MS Project (extraia e abra o .xml no Project; salve como .mpp)" ' + h(function () { croExportar(p); }) + '>' + XL_IC + 'Exportar MS Project</button>' + (ed ? croImportarBtn() : ''));
+  var s = titulo('CRONOGRAMA FÍSICO', tabs + croStatusCampo(p, R) + '<button class="bxl" data-tip="Arquivo do MS Project (.xml com EAP, vínculos, linha de base, % e calendário). Abra no Project e use Salvar como › .mpp" ' + h(function () { croExportar(p); }) + '>' + XL_IC + 'MS Project</button><button class="bxl" data-tip="Cronograma completo em Excel, com predecessoras e sucessoras" ' + h(function () { croExcel(p); }) + '>' + XL_IC + 'Excel</button>' + (ed ? croImportarBtn() : ''));
   var pv = croPct(tot, 'pv'), ev = croPct(tot, 'ev');
   s += '<div class="gk cro-k">' + croKt('Avanço previsto (LB)', pct(pv), 'até ' + fdate(Math.floor(R.st))) + croKt('Avanço real', pct(ev), 'ponderado pelo custo da LB', 'hero') +
     croKt('Desvio', (ev - pv >= 0 ? '+' : '') + nf2.format((ev - pv) * 100) + ' p.p.', 'SPI ' + (pv ? nf2.format(ev / pv) : '–'), ev < pv ? 'ru' : '') +
@@ -2554,23 +2556,24 @@ function croEap(p, R, V) {
   var s = '<div class="cpu-lb"><input id="cro-busca" type="search" placeholder="Localizar EAP, tarefa ou local…" aria-label="Localizar" data-live="1" value="' + esc(V.busca) + '" ' + h(function (el) { V.busca = el.value; agendar(); }) + '>' +
     '<span class="nv" data-tip="Níveis da EAP">' + [1, 2, 3, 4, 5, 6, 7, 8].map(function (n) { return '<button class="' + (V.nivel === n && !V.macros ? 'on' : '') + '" ' + h(function () { V.nivel = n; V.exp = {}; V.macros = false; agendar(); }) + '>' + n + '</button>'; }).join('') + '</span>' +
     '<button class="lk' + (V.macros ? ' on' : '') + '" ' + h(function () { V.macros = !V.macros; agendar(); }) + '>' + (V.macros ? 'Mostrar EAP completa' : 'Só macroatividades') + '</button></div>';
-  s += '<div class="tw" id="tw-cro"><table class="g cro"><thead><tr><th style="min-width:88px">EAP</th><th style="min-width:340px">TAREFA</th><th>DUR. (d)</th><th>INÍCIO LB</th><th>TÉRMINO LB</th><th>INÍCIO</th><th>TÉRMINO</th><th>PESO</th><th>PREV.</th><th>REAL</th><th>DESVIO</th><th>VENDA LB (R$)</th><th>CUSTO CPU (R$)</th><th>MARGEM</th><th style="min-width:240px">GANTT <i class="cro-leg"><b style="background:' + CRO_COR.lb + '"></b>LB <b style="background:' + CRO_COR.at + '"></b>atual <b style="background:' + CRO_COR.re + '"></b>real</i></th></tr></thead><tbody>';
+  var LG = croLig(p, R);
+  s += '<div class="tw" id="tw-cro"><table class="g cro"><thead><tr><th>Nº</th><th style="min-width:88px">EAP</th><th style="min-width:340px">TAREFA</th><th>DUR. (d)</th><th>INÍCIO LB</th><th>TÉRMINO LB</th><th>INÍCIO</th><th>TÉRMINO</th><th style="min-width:120px">PREDECESSORAS</th><th style="min-width:120px">SUCESSORAS</th><th>PESO</th><th>PREV.</th><th>REAL</th><th>DESVIO</th><th>VENDA LB (R$)</th><th>CUSTO CPU (R$)</th><th>MARGEM</th><th style="min-width:240px">GANTT <i class="cro-leg"><b style="background:' + CRO_COR.lb + '"></b>LB <b style="background:' + CRO_COR.at + '"></b>atual <b style="background:' + CRO_COR.re + '"></b>real</i></th></tr></thead><tbody>';
   var stx = X(R.st);
   vis.forEach(function (t) {
     var n = R.N[t.u], tem = R.kids[t.u] && R.kids[t.u].length, ab = tem && (b || V.macros ? true : aberto(t)), mac = R.macro[t.u], pvp = croPct(n, 'pv'), evp = croPct(n, 'ev');
     var nl = (C.cpus.links[t.u] || []).length, mg = n.v && n.cd ? (n.v - n.cd) / n.v : null;
     var bi = dn(t.bi), bf = dn(t.bf), ai = dn(t.i), af = dn(t.f);
     var g = '<div class="gt">' + (bi != null ? '<i class="lb" style="left:' + X(bi) + '%;width:' + Math.max(0.3, X(bf) - X(bi)) + '%"></i>' : '') + '<i class="at' + (t.s ? ' sm' : '') + '" style="left:' + X(ai) + '%;width:' + Math.max(0.3, X(af) - X(ai)) + '%"><u style="width:' + Math.min(100, evp * 100) + '%"></u></i><i class="sd" style="left:' + stx + '%"></i></div>';
-    s += '<tr class="' + (t.l <= 1 ? 'gr' : t.s ? (mac ? 'mc' : 'sm') : '') + '"><td>' + esc(t.w) + '</td><td class="cro-n" style="padding-left:' + (6 + Math.max(0, t.l - 1) * 12) + 'px">' +
+    s += '<tr class="' + (t.l <= 1 ? 'gr' : t.s ? (mac ? 'mc' : 'sm') : '') + '"><td class="n vz">' + LG.id[t.u] + '</td><td>' + esc(t.w) + '</td><td class="cro-n" style="padding-left:' + (6 + Math.max(0, t.l - 1) * 12) + 'px">' +
       (tem && !b && !V.macros ? '<button class="tg" aria-label="' + (ab ? 'Recolher' : 'Expandir') + '" ' + h(function () { V.exp[t.u] = !ab; agendar(); }) + '>' + (ab ? '▾' : '▸') + '</button>' : '<span class="tg"></span>') +
       (t.m ? '◆ ' : '') + esc(t.n) + (mac ? ' <button class="cro-cpu' + (nl ? ' on' : '') + '" data-tip="CPUs desta macroatividade" ' + h(function () { S.v.dlg = { tipo: 'croCpu', u: t.u, novo: '' }; agendar(); }) + '>CPU' + (nl ? ' ' + nl : '') + '</button>' : '') + '</td>' +
-      '<td class="n">' + nfq.format(num(t.dm) / (num(p.crono.mpd) || 480)) + '</td><td class="c">' + (bi != null ? fdate(Math.floor(bi)) : '') + '</td><td class="c">' + (bf != null ? fdate(Math.floor(bf)) : '') + '</td><td class="c">' + fdate(Math.floor(ai)) + '</td><td class="c">' + fdate(Math.floor(af)) + '</td>' +
+      '<td class="n">' + nfq.format(num(t.dm) / (num(p.crono.mpd) || 480)) + '</td><td class="c">' + (bi != null ? fdate(Math.floor(bi)) : '') + '</td><td class="c">' + (bf != null ? fdate(Math.floor(bf)) : '') + '</td><td class="c">' + fdate(Math.floor(ai)) + '</td><td class="c">' + fdate(Math.floor(af)) + '</td>' + croLigTd(LG.pre[t.u]) + croLigTd(LG.suc[t.u]) +
       '<td class="n">' + (R.tot.v ? nf2.format(n.v / R.tot.v * 100) + '%' : '') + '</td><td class="n">' + pct(pvp) + '</td>' +
       (!t.s && podeEditar() ? cel('crp' + t.u, realDe(t) / 100, function (v) { croAvanco(p, t, v, R); }, { t: 'pct', rot: 'Avanço real', cls: 'cro-r' }) : '<td class="n k">' + pct(evp) + '</td>') +
       '<td class="n' + (evp < pvp - 0.0005 ? ' pico' : '') + '">' + nf2.format((evp - pvp) * 100) + '</td><td class="n">' + zero(n.v, money) + '</td><td class="n">' + zero(n.cd, money) + '</td><td class="n' + (mg != null && mg < 0 ? ' pico' : '') + '">' + (mg == null ? '' : pct(mg)) + '</td><td class="gtc">' + g + '</td></tr>';
   });
   s += '</tbody></table></div><div class="nota">' + (corte ? '<b class="pico">Mostrando as primeiras ' + MAXL + ' linhas; use os níveis ou a busca.</b> ' : '') + int(T.length) + ' tarefas · ' + int(R.leaves.length) + ' de execução · ' + int(Object.keys(R.macro).length) + ' macroatividades (botão CPU). ' +
-    'Peso, previsto e real são ponderados pelo custo da linha de base (venda); tarefas sem custo pesam pela duração. ' + (podeEditar() ? 'O avanço real é lançado nas tarefas de execução (coluna REAL).' : '') + '</div>';
+    'Peso, previsto e real são ponderados pelo custo da linha de base (venda); tarefas sem custo pesam pela duração. ' + 'Vínculos (Nº da tarefa + tipo): TI término-início · II início-início · TT término-término · IT início-término; +2d/-1d = folga em dias úteis. ' + (podeEditar() ? 'O avanço real é lançado nas tarefas de execução (coluna REAL).' : '') + '</div>';
   return s;
 }
 function croAvanco(p, t, v, R) {
@@ -3123,7 +3126,7 @@ function zipUm(nome, texto) {
 function croExportar(p) {
   try {
     var nome = (p.crono.arquivo || p.nome).replace(/\.(mpp|xml)$/i, '').replace(/[\\/:*?"<>|]+/g, '-') + '-planning-' + isoDia(croCalc(p).st), xml = croXml(p);
-    zipUm(nome + '.xml', xml).then(function (z) { baixar(nome + '.zip', z); }, function (e) { msgbox('ERRO!', 'Não foi possível compactar o XML: ' + e.message, 'crit'); });
+    baixar(nome + '.xml', new Blob([xml], { type: 'application/xml' }));
   } catch (e) { console.error(e); msgbox('ERRO!', 'Não foi possível gerar o XML: ' + e.message, 'crit'); }
 }
 
@@ -4117,13 +4120,19 @@ function shInp(p) {
     '<label>Nível ' + sel('ip-niv', V.nivel, [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [99, 'Todos']], function (v) { V.nivel = +v; V.exp = {}; }) + '</label>' +
     '<label>Localizar <input id="ip-busca" type="search" data-live="1" value="' + esc(V.busca) + '" placeholder="ID ou atividade" ' + h(function (el) { V.busca = el.value; agendar(); }) + '></label>' +
     '<label class="rd"><input type="checkbox"' + (V.so ? ' checked' : '') + ' ' + h(function (el) { V.so = el.checked; agendar(); }) + '> Só atividades do mês</label>' +
+    '<label>Visão ' + sel('ip-modo', V.modo || 'L', [['L', 'Lançamento (compacta)'], ['C', 'Completa (com datas e peso)']], function (v) { V.modo = v; }) + '</label>' +
+    '<label class="ip-dia">Lançar em <input type="date" id="ip-dia" max="' + isoDia(corte) + '" value="' + isoDia(V.dia != null ? V.dia : corte) + '" ' + h(function (el) { var d = el.value ? E.day(el.value) : corte; V.dia = Math.min(d, corte); V.mes = miDe(V.dia); }) + '></label>' +
+    '<label class="rd"><input type="checkbox"' + (V.dias !== false ? ' checked' : '') + ' ' + h(function (el) { V.dias = el.checked; agendar(); }) + '> Dias do mês</label>' +
     (PA ? '<label>EAP ' + sel('ip-eap', V.eap || 'PA', [['PA', 'Planilha de avanço'], ['CRO', 'Cronograma (padrão OP)']], function (v) { V.eap = v; V.exp = {}; }) + '</label>' : '') +
     (ed ? '<span style="flex:1"></span><button class="lk" data-tip="Atividade que não consta no cronograma oficial (ex.: alojamento)" ' + h(function () { var n = m.extra.length + 1; m.extra.push({ x: 'X' + Date.now().toString(36), id: 'N TEM NO CRO', n: 'ATIVIDADE ' + ('0' + n).slice(-2), bi: '', bf: '', q: 100, u: '%' }); inpSalvarMeta(p); agendar(); }) + '>+ Atividade fora do cronograma</button>' : '') + '</div>';
   /* cartões */
   var raiz = R.raiz, pv = pct2(prevN[raiz.u]), rv = pct2(realN[raiz.u]);
   s += '<div class="gk cro-k">' + croKt('Data de corte', fdate(corte), 'data de status do cronograma') + croKt('Avanço previsto (LB)', pct(pv), 'dias úteis do calendário do projeto') + croKt('Avanço real', pct(rv), 'ponderado pela venda', 'hero') + croKt('Desvio', (rv - pv >= 0 ? '+' : '') + nf2.format((rv - pv) * 100) + ' p.p.', 'SPI ' + (pv ? nf2.format(rv / pv) : '–'), rv < pv ? 'ru' : '') + '</div>';
   /* cabeçalho */
-  var cab = '<tr><th class="l f1 ip-id">ID</th><th class="l f1 ip-at">ATIVIDADE</th><th>INÍCIO LB</th><th>TÉRMINO LB</th><th>INÍCIO REAL</th><th>TÉRMINO REAL</th><th>PESO</th><th>QTD PROJETO</th><th>UND</th><th>QTD REAL</th><th>% PREVISTO</th><th>% REAL</th><th>DESVIO</th>' +
+  var comp = V.modo === 'C', verD = V.dias !== false, diaL = V.dia != null ? Math.min(V.dia, corte) : corte, docL = inpMesDoc(p, inpYm(diaL), false), MVL = docL ? docL.v : {}, ddL = ('0' + E.ymd(diaL)[2]).slice(-2);
+  if (!verD) dias = [];
+  var nCols = 11 + (comp ? 5 : 0) + dias.length;
+  var cab = '<tr><th class="l f1 ip-id">ID</th><th class="l f1 ip-at">ATIVIDADE</th>' + (comp ? '<th>INÍCIO LB</th><th>TÉRMINO LB</th><th>INÍCIO REAL</th><th>TÉRMINO REAL</th><th>PESO</th>' : '') + '<th>QTD PROJETO</th><th>UND</th><th class="ip-lc">LANÇAR<br><span>' + fdate(diaL).slice(0, 5) + '</span></th><th>QTD REAL</th><th class="ip-av">AVANÇO</th><th>% PREV.</th><th>% REAL</th><th>DESVIO</th>' +
     dias.map(function (x) { var u = cal.util(x); return '<th class="ip-d' + (u ? '' : ' ip-nu') + (x === corte ? ' ip-hj' : '') + '">' + ('0' + E.ymd(x)[2]).slice(-2) + '<br><span>' + 'DSTQQSS'.charAt(E.weekday(x) - 1) + '</span></th>'; }).join('') + '</tr>';
   var linhas = '', n = 0, MAX = 400, cheio = false, b = semAcento(V.busca);
   var linha = function (o) {
@@ -4138,10 +4147,11 @@ function shInp(p) {
     var nm = o.extra && ed ? '<input class="ip-tx" id="ip-n' + o.uid + '" value="' + esc(o.nome) + '" ' + h(function (el) { o.extra.n = semAcento(el.value).trim() || o.extra.n; inpSalvarMeta(p); agendar(); }) + '>' : esc(o.nome);
     var idc = o.extra && ed ? '<input class="ip-tx ip-txs" id="ip-i' + o.uid + '" value="' + esc(o.id) + '" ' + h(function (el) { o.extra.id = semAcento(el.value).trim(); inpSalvarMeta(p); agendar(); }) + '>' : esc(o.id);
     var s2 = '<tr class="' + (o.folha ? '' : 'ip-g ip-l' + Math.min(o.nivel, 4)) + (o.extra ? ' ip-x' : '') + '"><td class="f1 ip-id">' + (o.extra && ed ? '<button class="lk ip-del" data-tip="Excluir" ' + h(function () { confirma('Excluir a atividade ' + o.nome + ' e os avanços lançados nela?', function () { m.extra.splice(m.extra.indexOf(o.extra), 1); inpSalvarMeta(p); }); }) + '>×</button>' : '') + idc + '</td>' +
-      '<td class="f1 ip-at" style="padding-left:' + (6 + Math.max(0, o.nivel - 1) * 12) + 'px">' + tg + nm + '</td>' + dt('bi', o.bi) + dt('bf', o.bf) +
-      '<td class="c">' + fd(ini) + '</td><td class="c">' + fd(fim) + '</td><td class="n">' + (ps ? nf2.format(ps * 100) + '%' : '–') + '</td>' +
+      '<td class="f1 ip-at" style="padding-left:' + (6 + Math.max(0, o.nivel - 1) * 12) + 'px">' + tg + nm + '</td>' + (comp ? dt('bi', o.bi) + dt('bf', o.bf) +
+      '<td class="c">' + fd(ini) + '</td><td class="c">' + fd(fim) + '</td><td class="n">' + (ps ? nf2.format(ps * 100) + '%' : '–') + '</td>' : '') +
       (o.folha && ed ? '<td class="ip-e"><input class="ip-n" inputmode="decimal" id="ip-q' + o.uid + '" value="' + nf2.format(qp).replace(/\./g, '') + '" ' + h(function (el) { m.q[o.uid] = parseNum(el.value); if (o.extra) o.extra.q = m.q[o.uid]; inpSalvarMeta(p); inpParaCro(p, o.uid); agendar(); }) + '></td><td class="ip-e"><input class="ip-tx ip-txs" id="ip-u' + o.uid + '" value="' + esc(un) + '" ' + h(function (el) { m.u[o.uid] = semAcento(el.value).trim(); inpSalvarMeta(p); agendar(); }) + '></td>' : '<td class="n">' + (o.folha ? nf2.format(qp) : '') + '</td><td class="c">' + (o.folha ? esc(un) : '') + '</td>') +
-      '<td class="n">' + (o.folha ? nf2.format(r ? r.tot : 0) : '') + '</td><td class="n">' + (pvv == null ? '–' : pct(pvv)) + '</td><td class="n"><b>' + pct(rr) + '</b></td><td class="n' + (dsv != null && dsv < -0.05 ? ' pico' : '') + '">' + (dsv == null ? '–' : (dsv >= 0 ? '+' : '') + nf2.format(dsv)) + '</td>';
+      (function () { if (!o.folha) return '<td class="ip-lc"></td>'; var vL = ((MVL || {})[o.uid] || {})[ddL]; return ed ? '<td class="ip-e ip-lc"><input class="ip-n" inputmode="decimal" id="ip-L' + o.uid + '" placeholder="0" value="' + (vL ? nf2.format(vL).replace(/\./g, '') : '') + '" ' + h(function (el) { inpLanca(p, o.uid, diaL, el.value.trim() === '' ? null : parseNum(el.value)); agendar(); }) + '></td>' : '<td class="n ip-lc">' + (vL ? nf2.format(vL) : '') + '</td>'; })() +
+      '<td class="n">' + (o.folha ? nf2.format(r ? r.tot : 0) : '') + '</td><td class="ip-av"><span class="ip-bar" title="Real ' + pct(rr) + (pvv == null ? '' : ' · previsto ' + pct(pvv)) + '"><i class="' + (pvv != null && rr < pvv - 0.0005 ? 'atr' : '') + '" style="width:' + Math.min(100, rr * 100).toFixed(1) + '%"></i>' + (pvv == null ? '' : '<b style="left:' + Math.min(100, pvv * 100).toFixed(1) + '%"></b>') + '</span></td><td class="n">' + (pvv == null ? '–' : pct(pvv)) + '</td><td class="n"><b>' + pct(rr) + '</b></td><td class="n' + (dsv != null && dsv < -0.05 ? ' pico' : '') + '">' + (dsv == null ? '–' : (dsv >= 0 ? '+' : '') + nf2.format(dsv)) + '</td>';
     s2 += dias.map(function (x) {
       var dd = ('0' + E.ymd(x)[2]).slice(-2), v = MVu[dd], cls = (cal.util(x) ? '' : ' ip-nu') + (x === corte ? ' ip-hj' : '');
       if (!o.folha) return '<td class="ip-d' + cls + '"></td>';
@@ -4200,11 +4210,21 @@ function shInp(p) {
     linhas += linha({ uid: t.u, id: t.w || '', nome: t.n, nivel: t.l, folha: folha, bi: bi, bf: bf, t: t }); n++;
   });
   }
-  s += '<div class="tw inp-t" id="tw-inp"><table class="g inp"><thead>' + cab + '</thead><tbody>' + (linhas || '<tr><td colspan="' + (13 + dias.length) + '" class="vz">Nenhuma atividade.</td></tr>') + '</tbody></table></div>' +
+  s += '<div class="tw inp-t" id="tw-inp"><table class="g inp"><thead>' + cab + '</thead><tbody>' + (linhas || '<tr><td colspan="' + nCols + '" class="vz">Nenhuma atividade.</td></tr>') + '</tbody></table></div>' +
     '<div class="nota">' + (cheio ? '<b>Mostrando as primeiras ' + MAX + ' linhas</b> — use Localizar, o nível ou "Só atividades do mês". ' : '') + 'Brancas: campos de lançamento (datas da linha de base, quantidade de projeto, unidade e a quantidade executada em cada dia até a data de corte). As demais colunas são calculadas e travadas. Peso = participação na venda da linha de base. % previsto = dias úteis decorridos entre o início e o término da linha de base (feriados, paralisações e clima do projeto). O % real, o início e o término reais lançados aqui passam para o cronograma físico, curvas, KPI e relatórios.</div>';
   return s;
 }
 /* datas da linha de base: das tarefas do cronograma ou das atividades fora dele */
+/* Enter / ↓ / ↑ nas células de lançamento: vai para a mesma coluna na linha de baixo ou de cima */
+document.addEventListener('keydown', function (ev) {
+  var el = ev.target; if (!el || !el.classList || !el.classList.contains('ip-n') || !el.id) return;
+  if (ev.key !== 'Enter' && ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp') return;
+  var td = el.closest('td'), tr = td && td.parentNode; if (!tr) return;
+  var col = Array.prototype.indexOf.call(tr.children, td), alvo = null, x = tr;
+  while (!alvo) { x = ev.key === 'ArrowUp' ? x.previousElementSibling : x.nextElementSibling; if (!x) break; var c = x.children[col], inp = c && c.querySelector('input.ip-n'); if (inp && inp.id) alvo = inp.id; }
+  if (!alvo) return; ev.preventDefault(); S._focoProx = alvo; el.blur();
+  setTimeout(function () { if (!S._focoProx) return; var t = document.getElementById(S._focoProx); S._focoProx = null; if (t) { t.focus(); try { t.select(); } catch (e) { } } }, 80);
+});
 function inpLb(p, o, k, v) {
   if (o.extra) { o.extra[k] = v || ''; inpSalvarMeta(p); return; }
   var t = o.t; if (!t || !v) return;
@@ -6890,13 +6910,13 @@ var MANUAL = {
     d: ['Os números vêm do cronograma, do avanço lançado e do custo calculado; não há digitação nesta guia.', 'Use para reuniões de acompanhamento e para conferir rapidamente se o projeto está adiantado ou atrasado.'],
     f: ['Cronograma e avanço atualizados', 'Painel recalcula sozinho', 'Ler curva S e desvios', 'Detalhar nos relatórios'] },
   INP: { r: 'Planilha de avanço: lançamento diário das quantidades executadas em cada atividade do cronograma.',
-    d: ['Cada linha é uma atividade de execução com quantidade de projeto e unidade; cada coluna é um dia do mês.', 'O avanço lançado calcula o % físico, o início e o término reais das tarefas no Cronograma físico, e alimenta RDO, KPI, Quadro de saldos e curva S.', 'Atividades extras podem ser incluídas quando não existem no cronograma.'],
+    d: ['Cada linha é uma atividade de execução com quantidade de projeto e unidade; cada coluna é um dia do mês.', 'O avanço lançado calcula o % físico, o início e o término reais das tarefas no Cronograma físico, e alimenta RDO, KPI, Quadro de saldos e curva S.', 'Atividades extras podem ser incluídas quando não existem no cronograma.', 'Visão Lançamento (compacta) ou Completa; escolha a data em “Lançar em” e digite na coluna amarela. Enter ou setas ↑↓ passam para a linha seguinte. A barra mostra o avanço real e a marca o previsto.'],
     f: ['Produção do dia em campo', 'Lançar quantidade na data', '% físico e datas reais atualizam', 'RDO, KPI e curva S refletem o avanço'] },
   RDO: { r: 'RDO – Diário de obra: um relatório por dia, montado automaticamente com cabeçalho, efetivo, equipamentos e atividades executadas.',
     d: ['Cabeçalho (número, data, contrato, prazos) vem dos dados do projeto.', 'Mão de obra e equipamentos diretos = produção do dia na Planilha de avanço × composições relacionadas; indiretos = equipes de permanência do mês.', 'Clima, ocorrências, comentários e ajustes de efetivo são digitados. Emitir congela o relatório do dia.'],
     f: ['Avanço do dia lançado', 'Abrir o RDO da data', 'Conferir efetivo e equipamentos', 'Registrar clima e ocorrências', 'Emitir (congela)'] },
   CRO: { r: 'Cronograma físico: o cronograma do projeto (importado do MS Project ou gerado pelo padrão), com linha de base, % físico, curva S e venda × custo × resultado.',
-    d: ['Importar MS Project lê arquivos XML (o .mpp pode ser salvo como XML no MS Project). As tarefas são reorganizadas na EAP padrão OP Consulting.', 'Avanço real = % físico concluído ponderado pelo custo da linha de base; previsto = linha de base no calendário do projeto.', 'Cada macroatividade recebe composições (CPU) com quantidades, que distribuem o custo direto no tempo.', 'Exportar gera XML do MS Project com linha de base, % físico, vínculos e calendários.'],
+    d: ['Importar MS Project lê arquivos XML (o .mpp pode ser salvo como XML no MS Project). As tarefas são reorganizadas na EAP padrão OP Consulting.', 'Avanço real = % físico concluído ponderado pelo custo da linha de base; previsto = linha de base no calendário do projeto.', 'Cada macroatividade recebe composições (CPU) com quantidades, que distribuem o custo direto no tempo.', 'Colunas Nº, Predecessoras e Sucessoras com os vínculos TI (término-início), II (início-início), TT (término-término) e IT (início-término), com folga em dias.', 'Exportar: botão MS Project gera o XML (abra no MS Project e use Salvar como .mpp) com linha de base, % físico, vínculos e calendários; botão Excel gera a planilha do cronograma com vínculos.'],
     f: ['Gerar padrão ou importar XML', 'Conferir EAP e vínculos', 'Relacionar CPUs (Relacionamento)', 'Congelar linha de base (revisão)', 'Atualizar avanço e replanejar'] },
   SUP: { r: 'Mapa de suprimentos: lista o que precisa ser comprado ou fornecido, quando é necessário e quando precisa ser pedido, a partir do cronograma.',
     d: ['A data de necessidade vem da primeira atividade que consome o item; a data limite de pedido desconta o prazo (lead time) da categoria e a folga.', 'Responsabilidade (contratada ou contratante), fornecedor, status, datas e quantidades informadas ficam registrados com histórico.', 'Valor da compra, prazo de pagamento (dias após a entrega), data e valor pago alimentam o Fluxo de caixa (itens da contratada).', 'Painel com alertas (atrasado, crítico, alta), tabela, linha do tempo (Gantt) e exportação Excel e PDF.'],
@@ -7505,7 +7525,7 @@ var XL_COR = { azul: 'FF1769E8', azulEsc: 'FF0F3F8C', tinta: 'FF1F2A3A', cinza: 
 var OP_LOGO_PNG = null;
 function opLogoPng() {
   if (OP_LOGO_PNG) return Promise.resolve(OP_LOGO_PNG);
-  return new Promise(function (res) { var im = new Image(); im.onload = function () { try { var c = document.createElement('canvas'); c.width = 720; c.height = 192; c.getContext('2d').drawImage(im, 0, 0, 720, 192); OP_LOGO_PNG = c.toDataURL('image/png'); } catch (e) { OP_LOGO_PNG = null; } res(OP_LOGO_PNG); }; im.onerror = function () { res(null); }; im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(WM_SVG.replace('opacity="0.11"', 'opacity="1"').replace('viewBox="0 0 300 96"', 'viewBox="0 0 360 96" width="720" height="192"')); });
+  return new Promise(function (res) { var im = new Image(); im.onload = function () { try { var c = document.createElement('canvas'); c.width = 720; c.height = 192; c.getContext('2d').drawImage(im, 0, 0, 720, 192); OP_LOGO_PNG = c.toDataURL('image/png'); } catch (e) { OP_LOGO_PNG = null; } res(OP_LOGO_PNG); }; im.onerror = function () { res(null); }; im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(WM_SVG.replace('opacity="0.11"', 'opacity="1"').replace('viewBox="0 0 360 96"', 'viewBox="0 0 360 96" width="720" height="192"')); });
 }
 function xlLogo(url) {
   if (!url || !/^data:image\/(png|jpe?g)/.test(url)) return Promise.resolve(null);
@@ -7518,7 +7538,8 @@ function xlTituloDe(nomeArq, aba) {
 function xlLayout(wbS, nomeArq) {
   return Promise.all([carregaExcelJS(), carregaXlsx()]).then(function (L) {
     var XJ = L[0], XS = L[1], p = proj(), em = S.base.empresa || {}, cli = p && p.clienteId && typeof cliDe === 'function' ? cliDe(p.clienteId) : null;
-    return (em.logo ? Promise.resolve(em.logo) : opLogoPng()).then(function (logoEx) { return Promise.all([xlLogo(logoEx), xlLogo(cli && cli.logo), xlLogo(p && p.logo)]); }).then(function (logos) {
+    var LG = logosDe(p);
+    return opLogoPng().then(function (op) { return Promise.all([xlLogo(op), xlLogo(LG.exec), xlLogo(LG.obra)]); }).then(function (logos) {
       var wb = new XJ.Workbook(); wb.creator = 'Planning Projects · OP Consulting'; wb.created = new Date();
       var B = { style: 'thin', color: { argb: XL_COR.borda } }, bordas = { top: B, left: B, bottom: B, right: B };
       var ids = logos.map(function (lg) { try { return lg ? wb.addImage({ base64: lg.base64, extension: lg.extension }) : null; } catch (e) { return null; } });
@@ -7551,6 +7572,7 @@ function xlLayout(wbS, nomeArq) {
         pos(ids[0], logos[0], 0.1, false);
         if (ids[1] != null) pos(ids[1], logos[1], ncTit, true);
         if (ids[2] != null) pos(ids[2], logos[2], ids[1] != null ? Math.max(ncTit - 2.2, 3) : ncTit, true);
+        /* logos: OP à esquerda; executor e projeto à direita */
         /* ---- tabela ---- */
         var cab = [], larg = [];
         for (var c = 0; c < nC; c++) { var hc = wsS[XS.utils.encode_cell({ r: R.s.r, c: R.s.c + c })]; cab.push(hc ? String(hc.v == null ? '' : hc.v) : ''); larg.push(Math.min(60, Math.max(8, cab[c].length * 0.95 + 2))); }
@@ -7592,5 +7614,169 @@ function xlLayout(wbS, nomeArq) {
     });
   });
 }
+
+
+/* faixa de logos no topo de todas as telas: OP Consulting, executor e projeto (troca junto com o projeto) */
+var OP_LOGO_URI = null;
+function logosTopo(p) {
+  if (!OP_LOGO_URI) OP_LOGO_URI = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(WM_SVG.replace('opacity="0.11"', 'opacity="1"'));
+  var L = logosDe(p), it = function (u, t, cls) { return u ? '<img class="lgt' + (cls ? ' ' + cls : '') + '" src="' + u + '" alt="' + esc(t) + '" title="' + esc(t) + '">' : ''; };
+  return '<span class="lgt-f">' + it(OP_LOGO_URI, 'OP Consulting', 'op') + it(L.exec, 'Executor') + it(p && L.obra, p ? 'Projeto: ' + p.nome : '') + '</span>';
+}
+
+
+/* ---------- vínculos: predecessoras e sucessoras (notação do MS Project em português) ----------
+   TI término-início (FS) · II início-início (SS) · TT término-término (FF) · IT início-término (SF); folga em dias úteis (+2d / -1d). */
+var CRO_LT_PT = { FS: 'TI', SS: 'II', FF: 'TT', SF: 'IT' };
+function croLig(p, R) {
+  var C = p._cro; if (C._lig && C._ligN === C.tasks.length && C._ligV === (C._ver || 0)) return C._lig;
+  var id = {}, pre = {}, suc = {}, mpd = num(p.crono.mpd) || 480;
+  C.tasks.forEach(function (t, i) { id[t.u] = i + 1; });
+  var txt = function (u, tp, lag) { var d = num(lag) / mpd, s = (id[u] || '?') + (CRO_LT_PT[tp] || 'TI'); if (Math.abs(d) >= 0.01) s += (d > 0 ? '+' : '') + nfq.format(d) + 'd'; return s; };
+  C.tasks.forEach(function (t) { (t.pr || []).forEach(function (r) { (pre[t.u] || (pre[t.u] = [])).push(txt(r[0], r[1], r[2])); (suc[r[0]] || (suc[r[0]] = [])).push(txt(t.u, r[1], r[2])); }); });
+  C._lig = { id: id, pre: pre, suc: suc }; C._ligN = C.tasks.length; C._ligV = C._ver || 0; return C._lig;
+}
+function croLigTd(L) { if (!L || !L.length) return '<td class="c vz">–</td>'; var t = L.join('; '); return '<td class="cro-lig" title="' + esc(t) + '">' + esc(t.length > 34 ? t.slice(0, 32) + '…' : t) + '</td>'; }
+function croExcel(p) {
+  var R = croCalc(p), C = p._cro, LG = croLig(p, R), mpd = num(p.crono.mpd) || 480;
+  carregaXlsx().then(function (X) {
+    var a = [['Nº', 'EAP', 'Tarefa', 'Nível', 'Duração (d)', 'Início LB', 'Término LB', 'Início', 'Término', 'Início real', 'Término real', 'Predecessoras', 'Sucessoras', '% Previsto', '% Real', 'Venda LB (R$)', 'Custo CPU (R$)', 'Sub-Parque', 'Sub-Campo']];
+    var fd = function (x) { var d = dn(x); return d == null ? '' : fdate(Math.floor(d)); };
+    C.tasks.forEach(function (t) {
+      var n = R.N[t.u] || {};
+      a.push([LG.id[t.u], t.w || '', new Array(Math.max(0, t.l - 1) * 3 + 1).join(' ') + (t.m ? '◆ ' : '') + t.n, t.l, Math.round(num(t.dm) / mpd * 100) / 100, fd(t.bi), fd(t.bf), fd(t.i), fd(t.f), fd(t.as), fd(t.af),
+        (LG.pre[t.u] || []).join('; '), (LG.suc[t.u] || []).join('; '), n.v != null ? croPct(n, 'pv') : '', n.v != null ? croPct(n, 'ev') : '', n.v || 0, n.cd || 0, t.sp || '', t.sc || '']);
+    });
+    var wb = X.utils.book_new(); X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(a), 'Cronograma');
+    var leg = [['Vínculo', 'Significado'], ['TI', 'Término-início: a tarefa começa quando a predecessora termina'], ['II', 'Início-início: começa junto com a predecessora'], ['TT', 'Término-término: termina junto com a predecessora'], ['IT', 'Início-término: termina quando a predecessora começa'], ['+2d / -1d', 'Folga (latência) em dias úteis']];
+    X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(leg), 'Legenda dos vínculos');
+    baixar(semAcento('Cronograma-' + (p.sigla ? p.sigla + '-' : '') + p.nome).replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) + '-' + isoDia(R.st) + '.xlsx', X.write(wb, { bookType: 'xlsx', type: 'array' }));
+  }, function (e) { msgbox('ERRO!', e.message, 'crit'); });
+}
+
+
+/* ================= CURVAS S (Relatórios) =================
+   Geral, Construção, Engenharia e Fornecimento, a partir do cronograma: previsto pela linha de base, tendência pelas
+   datas atuais e real pelos lançamentos da planilha de avanço (ou pelo % concluído, linear entre o início e o término reais).
+   Ponderação pela venda da linha de base de cada tarefa; sem venda, pela duração. */
+NOMES.CURVAS = 'Curva S'; PRECISA_PROJ.CURVAS = 1; ABAS.push(['CURVAS', '#1b7f4c']);
+ICA.CURVAS = '<path d="M3 20h18"/><path d="M4 18c5 0 5-12 16-13"/><path d="M6 18v-2M10 18v-5M14 18v-8M18 18v-11" stroke-dasharray="1 2"/>';
+(function () { GRUPOS_ABAS.forEach(function (g) { if (g[0] === 'Relatórios' && g[1].indexOf('CURVAS') < 0) g[1].unshift('CURVAS'); }); })();
+var CURVAS_DEF = [
+  { k: 'G', nome: 'Curva S Geral', curto: 'Geral' },
+  { k: 'C', nome: 'Curva S Construção', curto: 'Construção' },
+  { k: 'E', nome: 'Curva S Engenharia', curto: 'Engenharia' },
+  { k: 'F', nome: 'Curva S Fornecimento', curto: 'Fornecimento' }];
+var CURVAS_COR = { lb: '#2f6fd6', re: '#2e9e4f', tend: '#6b7280', barP: '#b9c0ca', barR: '#9fdcae', st: 'var(--tinta)' };
+/* classe da tarefa pela EAP: o primeiro nome (de cima para baixo) que indica engenharia, fornecimento ou construção */
+function curvaClasse(t, by) {
+  var cad = [], x = t; while (x) { cad.unshift(x); x = by[x.p]; }
+  for (var i = 0; i < cad.length; i++) {
+    var n = semAcento(cad[i].n || '');
+    if (/ENGENHAR|PROJETO(S)? (BASICO|EXECUTIVO)|DETALHAMENTO|AS[ -]?BUILT/.test(n)) return 'E';
+    if (/SUPRIMENTO|FORNECIMENTO|AQUISIC|COMPRAS?\b|FABRICAC|LOGISTICA|ENTREGA|DILIGENCIAMENTO/.test(n)) return 'F';
+    if (/CONSTRU|OBRAS?\b|CIVIL|MONTAGE|ELETROMEC|COMISSIONAM|CANTEIRO|TERRAPLEN|IMPLANTAC/.test(n)) return 'C';
+  }
+  return '';
+}
+function isoSemana(d) { var D = new Date(Math.floor(d) * 864e5), dia = (D.getUTCDay() + 6) % 7; D.setUTCDate(D.getUTCDate() - dia + 3); var a = new Date(Date.UTC(D.getUTCFullYear(), 0, 4)); return 1 + Math.round(((D - a) / 864e5 - 3 + ((a.getUTCDay() + 6) % 7)) / 7); }
+function curvasCalc(p) {
+  var R = croCalc(p); if (p._curvas && p._curvas.R === R && p._curvas.inp === p._inpC) return p._curvas;
+  var IR = inpReal(p), M = inpMeta(p), st = R.st, ini = R.ini, fim = R.fim, out = { R: R, inp: p._inpC, st: st, c: {} };
+  var cls = {}; R.leaves.forEach(function (t) { cls[t.u] = curvaClasse(t, R.by); });
+  var sem = []; if (ini != null) for (var w = segunda(ini); w <= Math.max(fim, st); w += 7) sem.push(w);
+  CURVAS_DEF.forEach(function (D) {
+    var L = R.leaves.filter(function (t) { return D.k === 'G' || cls[t.u] === D.k; });
+    var porVenda = L.some(function (t) { return num(t.bc) > 0; }), peso = function (t) { return porVenda ? num(t.bc) : Math.max(1, num(t.dm) / 480); };
+    var tot = L.reduce(function (a, t) { return a + peso(t); }, 0), sp = {}, stn = {}, sr = {};
+    L.forEach(function (t) {
+      var v = peso(t); if (!v) return;
+      var bi = dn(t.bi || t.i), bf = dn(t.bf || t.f), a = dn(t.i), b = dn(t.f);
+      croSpread(sp, KSEM, bi, bf, v); croSpread(stn, KSEM, a, b, v);
+      var r = IR[t.u], qp = num(M.q[t.u] != null ? M.q[t.u] : 100);
+      if (r && r.dias.length && qp > 0) { r.dias.forEach(function (x) { if (x[0] <= st) { var k = segunda(x[0]); sr[k] = (sr[k] || 0) + v * Math.min(1, x[1] / qp); } }); return; }
+      var ev = v * realDe(t) / 100;
+      if (ev) { var ra = dn(t.as) || a, rb = realDe(t) >= 100 ? (dn(t.af) || b) : Math.max(ra, st); if (rb > st) rb = st; croSpread(sr, KSEM, ra, rb, ev); }
+    });
+    var pP = [], pT = [], pR = [], aP = [], aT = [], aR = [], cP = 0, cT = 0, cR = 0, si = -1;
+    sem.forEach(function (w, i) {
+      var q = tot || 1, vp = (sp[w] || 0) / q, vt = (stn[w] || 0) / q, vr = (sr[w] || 0) / q; cP += vp; cT += vt; cR += vr;
+      pP.push(vp); pT.push(vt); pR.push(w <= st ? vr : null); aP.push(Math.min(1, cP)); aT.push(Math.min(1, cT)); aR.push(w <= st ? Math.min(1, cR) : null);
+      if (w <= st) si = i;
+    });
+    out.c[D.k] = { def: D, n: L.length, tot: tot, porVenda: porVenda, sem: sem, pP: pP, pT: pT, pR: pR, aP: aP, aT: aT, aR: aR, si: si,
+      prev: si >= 0 ? aP[si] : 0, real: si >= 0 ? aR[si] : 0 };
+  });
+  return (p._curvas = out);
+}
+function curvaSvg(K, st) {
+  var n = K.sem.length, W = 1000, H = 380, ml = 62, mr = 50, mt = 18, mb = 44, pw = W - ml - mr, ph = H - mt - mb, bw = pw / n;
+  var xc = function (i) { return ml + bw * (i + 0.5); }, y = function (v) { return mt + ph * (1 - v); };
+  var mx = 0; K.pP.forEach(function (v, i) { mx = Math.max(mx, v, K.pR[i] || 0); }); mx = mx > 0 ? Math.ceil(mx * 100 / 2) * 2 / 100 : 0.02; if (mx < 0.02) mx = 0.02;
+  var yb = function (v) { return mt + ph * (1 - v / mx); };
+  var g = '';
+  for (var k = 0; k <= 5; k++) { var yy = y(k / 5); g += '<line x1="' + ml + '" x2="' + (W - mr) + '" y1="' + yy + '" y2="' + yy + '" stroke="var(--cs-grid)"/><text x="' + (ml - 6) + '" y="' + (yy + 4) + '" text-anchor="end">' + (k * 20) + '%</text><text x="' + (W - mr + 6) + '" y="' + (yy + 4) + '">' + nf2.format(mx * 100 * k / 5) + '%</text>'; }
+  var bwi = Math.max(1, Math.min(14, bw * 0.38));
+  K.sem.forEach(function (w, i) {
+    var v = K.pP[i]; if (v > 0) g += '<rect x="' + (xc(i) - bwi).toFixed(1) + '" y="' + yb(v).toFixed(1) + '" width="' + bwi.toFixed(1) + '" height="' + (mt + ph - yb(v)).toFixed(1) + '" fill="' + CURVAS_COR.barP + '"><title>' + fdate(w) + ' · previsto na semana ' + pct(v) + '</title></rect>';
+    var r = K.pR[i]; if (r > 0) g += '<rect x="' + xc(i).toFixed(1) + '" y="' + yb(r).toFixed(1) + '" width="' + bwi.toFixed(1) + '" height="' + (mt + ph - yb(r)).toFixed(1) + '" fill="' + CURVAS_COR.barR + '"><title>' + fdate(w) + ' · real na semana ' + pct(r) + '</title></rect>';
+  });
+  var passo = Math.max(1, Math.ceil(n / 22));
+  K.sem.forEach(function (w, i) { if (i % passo === 0) g += '<text x="' + xc(i).toFixed(1) + '" y="' + (H - mb + 14) + '" text-anchor="end" transform="rotate(-40 ' + xc(i).toFixed(1) + ' ' + (H - mb + 14) + ')">' + fdate(w).slice(0, 5) + '/' + fdate(w).slice(8, 10) + '</text>'; });
+  var ln = function (arr, cor, extra) { var pts = []; arr.forEach(function (v, i) { if (v != null) pts.push(xc(i).toFixed(1) + ',' + y(v).toFixed(1)); }); return pts.length ? '<polyline fill="none" stroke="' + cor + '" stroke-width="2.4" stroke-linejoin="round" ' + (extra || '') + ' points="' + pts.join(' ') + '"/>' : ''; };
+  g += ln(K.aT, CURVAS_COR.tend, 'stroke-dasharray="2 4" stroke-width="2"') + ln(K.aP, CURVAS_COR.lb) + ln(K.aR, CURVAS_COR.re, 'stroke-width="3"');
+  if (K.si >= 0) {
+    var xs = xc(K.si);
+    g += '<line x1="' + xs + '" x2="' + xs + '" y1="' + mt + '" y2="' + (mt + ph) + '" style="stroke:' + CURVAS_COR.st + '" stroke-dasharray="6 4" stroke-width="1.4"/><text class="cs-f" x="' + (xs + 5) + '" y="' + (mt + 11) + '">Data status ' + fdate(Math.floor(st)) + '</text>';
+    g += '<circle cx="' + xs + '" cy="' + y(K.prev) + '" r="4" fill="' + CURVAS_COR.lb + '"/><text class="cs-v" x="' + (xs - 6) + '" y="' + (y(K.prev) + (K.prev >= K.real ? -8 : 16)) + '" text-anchor="end" fill="' + CURVAS_COR.lb + '">' + pct(K.prev) + '</text>';
+    g += '<circle cx="' + xs + '" cy="' + y(K.real) + '" r="4" fill="' + CURVAS_COR.re + '"/><text class="cs-v" x="' + (xs + 6) + '" y="' + (y(K.real) + (K.real > K.prev ? -8 : 16)) + '" fill="' + CURVAS_COR.re + '">' + pct(K.real) + '</text>';
+  }
+  return '<svg class="cs-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(K.def.nome) + '">' + g + '</svg>';
+}
+function curvaCard(p, K, st) {
+  var gap = K.real - K.prev, s = '<section class="cs-card" id="cs-' + K.def.k + '">';
+  s += '<header class="cs-h"><div class="cs-ds"><span>Data status <b>' + fdate(Math.floor(st)) + '</b></span><span>Semana <b>' + isoSemana(st) + '</b></span></div><h3>Curva S: ' + esc(p.nome) + ' – ' + esc(K.def.curto) + '</h3>' + logosTopo(p) + '</header>';
+  if (!K.n) return s + '<div class="vazio">Nenhuma tarefa de ' + esc(K.def.curto.toLowerCase()) + ' no cronograma. A classificação usa os nomes da EAP (ex.: “Engenharia”, “Suprimentos/Fornecimento”, “Construção/Montagem”).</div></section>';
+  s += '<div class="cs-gl"><span><i class="cs-li" style="background:' + CURVAS_COR.re + '"></i>Real</span><span><i class="cs-li" style="background:' + CURVAS_COR.lb + '"></i>LB previsto</span><span><i class="cs-li cs-dot" style="border-color:' + CURVAS_COR.tend + '"></i>Tendência (cronograma atual)</span><span><i class="cs-sq" style="background:' + CURVAS_COR.barR + '"></i>Real na semana</span><span><i class="cs-sq" style="background:' + CURVAS_COR.barP + '"></i>Previsto na semana</span></div>';
+  s += '<div class="cs-body"><div class="cs-ch">' + curvaSvg(K, st) + '</div><div class="cs-kp"><div><span>Previsto</span><b>' + pct(K.prev) + '</b></div><div><span>Real</span><b>' + pct(K.real) + '</b></div><div class="' + (gap < -1e-9 ? 'ru' : 'ok') + '"><span>GAP</span><b>' + (gap > 0 ? '+' : '') + pct(gap) + '</b></div></div></div>';
+  /* 7 semanas antes, a semana do status e 10 depois */
+  var i0 = Math.max(0, K.si - 7), i1 = Math.min(K.sem.length - 1, (K.si < 0 ? 0 : K.si) + 10), off = Math.floor(st) - segunda(st), cols = [];
+  for (var i = i0; i <= i1; i++) cols.push(i);
+  var cel = function (v, cls) { return '<td class="' + (cls || '') + '">' + (v == null ? '' : pct(v)) + '</td>'; };
+  s += '<div class="tw cs-tw"><table class="cs-t"><thead><tr><th>Data de corte</th>' + cols.map(function (i) { return '<th class="' + (i === K.si ? 'cs-at' : '') + '">' + fdate(K.sem[i] + off) + '</th>'; }).join('') + '</tr></thead><tbody>';
+  s += '<tr><th>Previsto %</th>' + cols.map(function (i) { return cel(K.pP[i], i === K.si ? 'cs-at' : ''); }).join('') + '</tr>';
+  s += '<tr><th>Real %</th>' + cols.map(function (i) { return cel(K.pR[i], i === K.si ? 'cs-at' : ''); }).join('') + '</tr>';
+  s += '<tr><th>GAP</th>' + cols.map(function (i) { var r = K.pR[i]; if (r == null) return '<td class="' + (i === K.si ? 'cs-at' : '') + '"></td>'; var g = r - K.pP[i]; return '<td class="' + (g < -1e-9 ? 'cs-ru' : g > 1e-9 ? 'cs-ok' : '') + (i === K.si ? ' cs-at' : '') + '">' + (g > 0 ? '+' : '') + pct(g) + '</td>'; }).join('') + '</tr>';
+  s += '<tr class="cs-ac"><th>Previsto acum.</th>' + cols.map(function (i) { return cel(K.aP[i], i === K.si ? 'cs-at' : ''); }).join('') + '</tr>';
+  s += '<tr class="cs-ac"><th>Real acum.</th>' + cols.map(function (i) { return cel(K.aR[i], i === K.si ? 'cs-at' : ''); }).join('') + '</tr>';
+  s += '</tbody></table></div><div class="nota">' + int(K.n) + ' tarefa(s) · ponderação pela ' + (K.porVenda ? 'venda da linha de base' : 'duração') + '. Previsto: linha de base; real: planilha de avanço (ou % concluído do cronograma).</div></section>';
+  return s;
+}
+function shCurvas(p) {
+  var tit = function (x) { return titulo('CURVA S', x || ''); };
+  if (!p.crono) return tit() + '<div class="vazio"><h3>Sem cronograma</h3>Importe o cronograma do projeto (guia Cronograma) para gerar as curvas S.</div>';
+  if (!p._cro) { croCarregar(p).then(agendar); return tit() + '<div class="vazio">Carregando o cronograma…</div>'; }
+  var Q; try { Q = curvasCalc(p); } catch (e) { console.error(e); return tit() + '<div class="vazio">Não foi possível calcular as curvas: ' + esc(e.message) + '</div>'; }
+  var V = S.v.curvas || (S.v.curvas = { k: 'T' }), ops = [['T', 'Todas']].concat(CURVAS_DEF.map(function (d) { return [d.k, d.curto]; }));
+  var s = tit('<div class="cs-sel" role="group" aria-label="Curvas">' + ops.map(function (o) { return '<button class="cs-b' + (V.k === o[0] ? ' on' : '') + '" ' + h(function () { V.k = o[0]; agendar(); }) + '>' + o[1] + '</button>'; }).join('') + '</div>' +
+    '<button class="bxl" ' + h(function () { curvasExcel(p); }) + '>' + XL_IC + 'Exportar Excel</button>');
+  CURVAS_DEF.forEach(function (d) { if (V.k === 'T' || V.k === d.k) s += curvaCard(p, Q.c[d.k], Q.st); });
+  return s;
+}
+function curvasExcel(p) {
+  var Q = curvasCalc(p), st = Q.st, off = Math.floor(st) - segunda(st);
+  carregaXlsx().then(function (X) {
+    var wb = X.utils.book_new(), r2 = function (v) { return v == null ? '' : Math.round(v * 10000) / 100; };
+    CURVAS_DEF.forEach(function (d) {
+      var K = Q.c[d.k], a = [['Semana', 'Início da semana', 'Data de corte', 'Previsto semana (%)', 'Previsto acum. (%)', 'Tendência acum. (%)', 'Real semana (%)', 'Real acum. (%)', 'GAP acum. (%)']];
+      K.sem.forEach(function (w, i) { a.push([isoSemana(w), fdate(w), fdate(w + off), r2(K.pP[i]), r2(K.aP[i]), r2(K.aT[i]), r2(K.pR[i]), r2(K.aR[i]), K.aR[i] == null ? '' : r2(K.aR[i] - K.aP[i])]); });
+      X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(a), d.curto.slice(0, 31));
+    });
+    baixar(semAcento('Curvas-S-' + (p.sigla ? p.sigla + '-' : '') + p.nome).replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) + '-' + isoDia(st) + '.xlsx', X.write(wb, { bookType: 'xlsx', type: 'array' }));
+  }, function (e) { msgbox('ERRO!', e.message, 'crit'); });
+}
+MANUAL.CURVAS = { r: 'Curva S: quatro curvas do projeto (Geral, Construção, Engenharia e Fornecimento) geradas a partir do cronograma.',
+  d: ['Previsto = linha de base; tendência = datas atuais do cronograma; real = lançamentos da Planilha de avanço (ou % concluído do cronograma). Ponderação pela venda da linha de base de cada tarefa.', 'As tarefas são classificadas pelos nomes da EAP: Engenharia/Projetos, Suprimentos/Fornecimento e Construção/Montagem/Comissionamento. A curva Geral soma todas.', 'Cada curva mostra barras semanais (previsto e real), curvas acumuladas, linha da data de status, quadro Previsto/Real/GAP e a tabela de 7 semanas antes até 10 semanas depois do status.', 'Exportação para Excel com uma planilha por curva.'],
+  f: ['Lançar o avanço da semana', 'Atualizar data de status', 'Abrir Relatórios › Curva S', 'Ler GAP previsto × real', 'Replanejar'] };
 
 })();
