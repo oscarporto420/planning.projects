@@ -630,7 +630,7 @@ function opMarcaPng() {
       try { var c = document.createElement('canvas'); c.width = 900; c.height = 288; var g = c.getContext('2d'); g.drawImage(img, 0, 0, 900, 288); WM_PNG = c.toDataURL('image/png').split(',')[1]; } catch (e) { WM_PNG = null; }
       res(WM_PNG);
     }; img.onerror = function () { res(null); };
-    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(WM_SVG.replace('opacity="0.11"', 'opacity="0.13"'));
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(WM_SVG.replace('opacity="0.11"', 'opacity="0.05"'));
   });
 }
 function xlMarca(wb) {
@@ -7766,10 +7766,10 @@ function shCurvas(p) {
 function curvasExcel(p) {
   var Q = curvasCalc(p), st = Q.st, off = Math.floor(st) - segunda(st);
   carregaXlsx().then(function (X) {
-    var wb = X.utils.book_new(), r2 = function (v) { return v == null ? '' : Math.round(v * 10000) / 100; };
+    var wb = X.utils.book_new(), r2 = function (v) { return v == null ? '' : Math.round(v * 1e6) / 1e6; };
     CURVAS_DEF.forEach(function (d) {
       var K = Q.c[d.k], a = [['Semana', 'Início da semana', 'Data de corte', 'Previsto semana (%)', 'Previsto acum. (%)', 'Tendência acum. (%)', 'Real semana (%)', 'Real acum. (%)', 'GAP acum. (%)']];
-      K.sem.forEach(function (w, i) { a.push([isoSemana(w), fdate(w), fdate(w + off), r2(K.pP[i]), r2(K.aP[i]), r2(K.aT[i]), r2(K.pR[i]), r2(K.aR[i]), K.aR[i] == null ? '' : r2(K.aR[i] - K.aP[i])]); });
+      K.sem.forEach(function (w, i) { a.push(['S' + ('0' + isoSemana(w)).slice(-2), fdate(w), fdate(w + off), r2(K.pP[i]), r2(K.aP[i]), r2(K.aT[i]), r2(K.pR[i]), r2(K.aR[i]), K.aR[i] == null ? '' : r2(K.aR[i] - K.aP[i])]); });
       X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(a), d.curto.slice(0, 31));
     });
     baixar(semAcento('Curvas-S-' + (p.sigla ? p.sigla + '-' : '') + p.nome).replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) + '-' + isoDia(st) + '.xlsx', X.write(wb, { bookType: 'xlsx', type: 'array' }));
